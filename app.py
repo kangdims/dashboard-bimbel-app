@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import glob
 
 # Konfigurasi Halaman Web
 st.set_page_config(
@@ -71,35 +72,32 @@ def clean_str(val):
         return None
     return str(int(val)) if isinstance(val, (int, float)) else str(val).strip()
 
+# Helper Function Auto-Load Files dari GitHub Repository jika tidak ada upload manual
+def load_combined_data(uploaded_files, filename_keywords):
+    if uploaded_files:
+        return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
+    
+    # Auto-scan seluruh file .xlsx di folder GitHub yang sesuai kata kunci
+    all_excel_files = glob.glob("*.xlsx")
+    matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords)]
+    
+    if matched_files:
+        dfs = []
+        for mf in matched_files:
+            try:
+                dfs.append(pd.read_excel(mf))
+            except Exception:
+                pass
+        if dfs:
+            return pd.concat(dfs, ignore_index=True)
+    return pd.DataFrame()
+
 # ---------------------------------------------------------
 # LOAD & COMBINE DATASETS AUTOMATICALLY
 # ---------------------------------------------------------
-# 1. Data Transaksi
-if files_trx:
-    df_trx_raw = pd.concat([pd.read_excel(f) for f in files_trx], ignore_index=True)
-else:
-    try:
-        df_trx_raw = pd.read_excel("20260805_data_trx_laporan.xlsx")
-    except:
-        df_trx_raw = pd.DataFrame()
-
-# 2. Data Siswa
-if files_siswa:
-    df_siswa_raw = pd.concat([pd.read_excel(f) for f in files_siswa], ignore_index=True)
-else:
-    try:
-        df_siswa_raw = pd.read_excel("20260805_data_siswanf.xlsx")
-    except:
-        df_siswa_raw = pd.DataFrame()
-
-# 3. Data Diskon
-if files_diskon:
-    df_diskon_raw = pd.concat([pd.read_excel(f) for f in files_diskon], ignore_index=True)
-else:
-    try:
-        df_diskon_raw = pd.read_excel("20260814_data_diskon.xlsx")
-    except:
-        df_diskon_raw = pd.DataFrame()
+df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
+df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
+df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
 # Standarisasi Kolom Lb dan TA untuk Filtering
 if not df_trx_raw.empty:
@@ -348,7 +346,6 @@ with tab5:
         if selected_lb != "Semua Cabang / Lokasi":
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
 
-        # Row 1: Grafik Pertumbuhan Siswa & Finansial Paket per TA
         col_ta1, col_ta2 = st.columns(2)
 
         with col_ta1:
@@ -381,7 +378,6 @@ with tab5:
 
         st.divider()
 
-        # Row 2: Distribusi Jenjang per TA
         st.subheader("3. Perbandingan Sebaran Jenjang Kelas Antar TA")
         jenjang_ta = df_siswa_filtered.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah Siswa')
         fig_jenjang_ta = px.bar(
@@ -392,7 +388,6 @@ with tab5:
 
         st.divider()
 
-        # Row 3: Tabel Rincian Komparasi Siswa per TA
         st.subheader("4. Rekapitulasi Data Siswa Multi-Tahun Ajaran")
         rekap_ta = df_siswa_filtered.groupby('ta_clean').agg(
             Total_Siswa=('No', 'count'),
@@ -406,4 +401,4 @@ with tab5:
         st.dataframe(rekap_ta, use_container_width=True)
 
     else:
-        st.warning("Data Siswa Multi-TA belum tersedia. Upload file Excel siswa di sidebar (Admin).")
+        st.warning("Data Siswa Multi-TA belum tersedia.")
