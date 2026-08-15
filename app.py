@@ -31,11 +31,23 @@ st.markdown("""
 st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
 st.caption("Aplikasi Analisis Keuangan, Siswa, Demografi, & Perbandingan 3 Tahun Ajaran (2425, 2526, 2627)")
 
-# Sidebar Upload File (Fitur Multi-Upload Aktif)
-st.sidebar.header("📁 Upload File Excel")
-files_trx = st.sidebar.file_uploader("1. Upload File Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-files_siswa = st.sidebar.file_uploader("2. Upload File Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-files_diskon = st.sidebar.file_uploader("3. Upload File Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+# ---------------------------------------------------------
+# HAK AKSES ADMIN vs STAF (Sembunyikan Upload untuk Staf)
+# ---------------------------------------------------------
+st.sidebar.header("👤 Hak Akses & Pengaturan")
+is_admin = st.sidebar.checkbox("🔑 Mode Admin (Upload Data)", value=False, help="Centang untuk membuka fitur upload file data baru.")
+
+# Sidebar Upload File (Hanya Tampak Jika Mode Admin Aktif)
+if is_admin:
+    st.sidebar.markdown("---")
+    st.sidebar.header("📁 Upload File Excel (Admin Only)")
+    files_trx = st.sidebar.file_uploader("1. Upload File Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+    files_siswa = st.sidebar.file_uploader("2. Upload File Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+    files_diskon = st.sidebar.file_uploader("3. Upload File Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+else:
+    files_trx = None
+    files_siswa = None
+    files_diskon = None
 
 # Helper Function
 def clean_str(val):
@@ -91,7 +103,7 @@ if not df_diskon_raw.empty:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(clean_str)
 
 # ---------------------------------------------------------
-# MASTER FILTERS SIDEBAR (TA & LOKASI)
+# MASTER FILTERS SIDEBAR (UNTUK SEMUA STAF & ADMIN)
 # ---------------------------------------------------------
 st.sidebar.divider()
 st.sidebar.header("📍 Master Filter Dashboard")
@@ -310,56 +322,67 @@ with tab4:
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan.")
 
-# --- TAB 5: PERBANDINGAN 3 TAHUN AJARAN ---
+# --- TAB 5: PERBANDINGAN TREN DATA SISWA & KEUANGAN 3 TAHUN AJARAN ---
 with tab5:
-    st.header("📈 Perbandingan Tren 3 Tahun Ajaran (2425 vs 2526 vs 2627)")
-    st.info("💡 Tab ini menganalisis pertumbuhan bisnis dan siswa dari tahun ke tahun secara langsung.")
+    st.header("📈 Perbandingan Tren Data Siswa & Keuangan (2425 vs 2526 vs 2627)")
+    st.info("💡 Tab ini menganalisis pergeseran data pendaftaran siswa, asal sekolah, dan finansial antar Tahun Ajaran.")
 
-    col_ta1, col_ta2 = st.columns(2)
-    with col_ta1:
-        st.subheader("1. Total Pendapatan per Tahun Ajaran (TA)")
-        if not df_trx_raw.empty and 'ta_clean' in df_trx_raw.columns:
-            df_trx_filtered = df_trx_raw.copy()
-            if selected_lb != "Semua Cabang / Lokasi":
-                df_trx_filtered = df_trx_filtered[df_trx_filtered['lb_clean'] == selected_lb]
-
-            rev_ta = df_trx_filtered.groupby('ta_clean')['Jumlah'].sum().reset_index()
-            rev_ta.columns = ['Tahun Ajaran', 'Total Pendapatan']
-            
-            fig_rev_ta = px.bar(
-                rev_ta, x='Tahun Ajaran', y='Total Pendapatan', text_auto='.3s',
-                color='Tahun Ajaran', color_discrete_sequence=px.colors.qualitative.Bold, template="plotly_dark"
-            )
-            st.plotly_chart(fig_rev_ta, use_container_width=True)
-        else:
-            st.warning("Data Transaksi Multi-TA belum tersedia.")
-
-    with col_ta2:
-        st.subheader("2. Pertumbuhan Jumlah Siswa per TA")
-        if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
-            df_siswa_filtered = df_siswa_raw.copy()
-            if selected_lb != "Semua Cabang / Lokasi":
-                df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
-
-            siswa_ta = df_siswa_filtered.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
-            siswa_ta.columns = ['Tahun Ajaran', 'Jumlah Siswa']
-            
-            fig_siswa_ta = px.line(
-                siswa_ta, x='Tahun Ajaran', y='Jumlah Siswa', markers=True, text='Jumlah Siswa', template="plotly_dark"
-            )
-            fig_siswa_ta.update_traces(textposition="top center", line=dict(width=3))
-            st.plotly_chart(fig_siswa_ta, use_container_width=True)
-        else:
-            st.warning("Data Siswa Multi-TA belum tersedia.")
-
-    st.divider()
-
-    st.subheader("3. Tabel Komparasi Kinerja Multi-Tahun Ajaran")
     if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
         df_siswa_filtered = df_siswa_raw.copy()
         if selected_lb != "Semua Cabang / Lokasi":
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
 
+        # 1. Komparasi Tren Jumlah Siswa & Nilai Paket Bimbingan
+        col_ta1, col_ta2 = st.columns(2)
+        with col_ta1:
+            st.subheader("1. Pertumbuhan Jumlah Siswa per TA")
+            siswa_ta = df_siswa_filtered.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
+            siswa_ta.columns = ['Tahun Ajaran', 'Jumlah Siswa']
+            fig_siswa_ta = px.line(
+                siswa_ta, x='Tahun Ajaran', y='Jumlah Siswa', markers=True, text='Jumlah Siswa', template="plotly_dark"
+            )
+            fig_siswa_ta.update_traces(textposition="top center", line=dict(width=3))
+            st.plotly_chart(fig_siswa_ta, use_container_width=True)
+
+        with col_ta2:
+            st.subheader("2. Perbandingan Pergeseran Jenjang Kelas per TA")
+            if 'Jenjang' in df_siswa_filtered.columns:
+                jenjang_ta = df_siswa_filtered.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah Siswa')
+                jenjang_ta.columns = ['Tahun Ajaran', 'Jenjang', 'Jumlah Siswa']
+                fig_jenjang_ta = px.bar(
+                    jenjang_ta, x='Tahun Ajaran', y='Jumlah Siswa', color='Jenjang', barmode='stack', template="plotly_dark"
+                )
+                st.plotly_chart(fig_jenjang_ta, use_container_width=True)
+
+        st.divider()
+
+        # 2. Komparasi Sumber Info Marketing & Top Sekolah
+        col_ta3, col_ta4 = st.columns(2)
+        with col_ta3:
+            st.subheader("3. Perbandingan Media Info Pendaftaran per TA")
+            if 'Info NF dari' in df_siswa_filtered.columns:
+                info_ta = df_siswa_filtered.groupby(['ta_clean', 'Info NF dari']).size().reset_index(name='Jumlah Siswa')
+                info_ta.columns = ['Tahun Ajaran', 'Media Info', 'Jumlah Siswa']
+                fig_info_ta = px.bar(
+                    info_ta, x='Tahun Ajaran', y='Jumlah Siswa', color='Media Info', barmode='group', template="plotly_dark"
+                )
+                st.plotly_chart(fig_info_ta, use_container_width=True)
+
+        with col_ta4:
+            st.subheader("4. Top 5 Sekolah Menyumbang Siswa per TA")
+            if 'Asal Sekolah' in df_siswa_filtered.columns:
+                sekolah_ta = df_siswa_filtered.groupby(['ta_clean', 'Asal Sekolah']).size().reset_index(name='Jumlah Siswa')
+                top_sekolah_ta = sekolah_ta.sort_values(['ta_clean', 'Jumlah Siswa'], ascending=[True, False]).groupby('ta_clean').head(5)
+                top_sekolah_ta.columns = ['Tahun Ajaran', 'Asal Sekolah', 'Jumlah Siswa']
+                fig_sek_ta = px.bar(
+                    top_sekolah_ta, x='Jumlah Siswa', y='Asal Sekolah', color='Tahun Ajaran', orientation='h', barmode='group', template="plotly_dark"
+                )
+                st.plotly_chart(fig_sek_ta, use_container_width=True)
+
+        st.divider()
+
+        # 3. Tabel Komparasi Rekap Kinerja Siswa & Finansial Multi-TA
+        st.subheader("5. Tabel Komparasi Detail Kinerja Data Siswa per TA")
         rekap_ta = df_siswa_filtered.groupby('ta_clean').agg(
             Total_Siswa=('No', 'count'),
             Total_Paket=('Biaya Paket', 'sum'),
@@ -367,7 +390,8 @@ with tab5:
             Total_Tagihan=('Tagihan', 'sum')
         ).reset_index()
 
-        rekap_ta.columns = ['Tahun Ajaran (TA)', 'Jumlah Siswa', 'Total Nilai Paket', 'Total Cash In', 'Sisa Tagihan']
+        rekap_ta.columns = ['Tahun Ajaran (TA)', 'Jumlah Siswa Terdaftar', 'Total Nilai Paket', 'Total Cash In', 'Sisa Tagihan']
         st.dataframe(rekap_ta, use_container_width=True)
+
     else:
-        st.warning("Data rincian Multi-TA belum tersedia.")
+        st.warning("Data Siswa Multi-TA belum tersedia.")
