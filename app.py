@@ -39,6 +39,20 @@ LOCATION_MAP = {
     '219': 'NF Tebet'
 }
 
+# Pemetaan Kode Jenjang -> Nama Jenjang
+JENJANG_MAP = {
+    'F': '4 SD',
+    'G': '5 SD',
+    'H': '6 SD',
+    'I': '7 SMP',
+    'J': '8 SMP',
+    'K': '9 SMP',
+    'L': '10 SMA',
+    'M': '11 SMA',
+    'N': '12 SMA',
+    'O': 'RONIN'
+}
+
 # ---------------------------------------------------------
 # AUTHENTICATION & LOGIN ADMIN (SIDEBAR)
 # ---------------------------------------------------------
@@ -73,7 +87,7 @@ else:
     files_siswa = st.sidebar.file_uploader("2. Upload File Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
     files_diskon = st.sidebar.file_uploader("3. Upload File Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-# Helper Function Standarisasi & Mapping Lokasi
+# Helper Function Standarisasi & Mapping
 def clean_str(val):
     if pd.isna(val):
         return None
@@ -84,6 +98,12 @@ def format_lb(val):
     if clean_val is None:
         return None
     return LOCATION_MAP.get(clean_val, clean_val)
+
+def format_jenjang(val):
+    if pd.isna(val):
+        return None
+    clean_val = str(val).strip().upper()
+    return JENJANG_MAP.get(clean_val, clean_val)
 
 # Helper Kategori Siswa berdasarkan Biaya Formulir
 def get_kategori_siswa(biaya):
@@ -128,7 +148,7 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
-# Standarisasi Kolom Lb, TA, dan Kategori Siswa
+# Standarisasi Kolom Lb, TA, Jenjang, dan Kategori Siswa
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -144,6 +164,8 @@ if not df_siswa_raw.empty:
         df_siswa_raw['ta_clean'] = df_siswa_raw['TA'].apply(clean_str)
     if 'Biaya Formulir' in df_siswa_raw.columns:
         df_siswa_raw['Kategori_Siswa'] = df_siswa_raw['Biaya Formulir'].apply(get_kategori_siswa)
+    if 'Jenjang' in df_siswa_raw.columns:
+        df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
 
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
@@ -541,7 +563,7 @@ with tab6:
         rekap_kec = rekap_kec.rename(columns={
             'ta_clean': 'Tahun Ajaran (TA)',
             'lb_clean': 'Lokasi Belajar',
-            'Kec Tinggal': 'Kecamatan Domisili',
+            'Kecamatan': 'Kecamatan Domisili',
             'Lunas': 'Jumlah Lunas',
             'Angsuran': 'Jumlah Angsuran'
         })
