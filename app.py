@@ -30,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
-st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, & Perbandingan 3 Tahun Ajaran (2425, 2526, 2627)")
+st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili (2425, 2526, 2627)")
 
 # ---------------------------------------------------------
 # AUTHENTICATION & LOGIN ADMIN (SIDEBAR)
@@ -77,6 +77,7 @@ def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
         return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
     
+    # Auto-scan seluruh file .xlsx di folder GitHub yang sesuai kata kunci
     all_excel_files = glob.glob("*.xlsx")
     matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords)]
     
@@ -97,13 +98,6 @@ def load_combined_data(uploaded_files, filename_keywords):
 df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
-
-# Penentuan Status Pembayaran (Lunas vs Angsuran)
-if not df_siswa_raw.empty:
-    if 'Tagihan' in df_siswa_raw.columns:
-        df_siswa_raw['Status Pembayaran'] = df_siswa_raw['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
-    else:
-        df_siswa_raw['Status Pembayaran'] = 'Lunas'
 
 # Standarisasi Kolom Lb dan TA untuk Filtering
 if not df_trx_raw.empty:
@@ -205,12 +199,13 @@ st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**"
 # ---------------------------------------------------------
 # TABS LAYOUT
 # ---------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "💰 Keuangan Transaksi", 
     "🎓 Pendaftaran Siswa", 
     "🏫 Sekolah & Domisili",
     "🏷️ Siswa Diskon Khusus",
-    "📈 Perbandingan 3 TA"
+    "📈 Perbandingan 3 TA",
+    "📊 Status Bayar Domisili (Auto)"
 ])
 
 # --- TAB 1: LAPORAN TRANSAKSI ---
@@ -312,36 +307,6 @@ with tab3:
             kel_df.columns = ['Kelurahan', 'Jumlah Siswa']
             fig_kel = px.bar(kel_df, x='Kelurahan', y='Jumlah Siswa', text='Jumlah Siswa', color='Jumlah Siswa', template="plotly_dark")
             st.plotly_chart(fig_kel, use_container_width=True)
-
-        st.divider()
-
-        # Fitur Persentase Lunas & Angsuran per Domisili
-        st.subheader("3. Persentase Status Pembayaran (Lunas vs Angsuran) Berdasarkan Domisili")
-        if 'Kec Tinggal' in df_siswa.columns and 'Status Pembayaran' in df_siswa.columns:
-            dom_status = df_siswa.groupby(['Kec Tinggal', 'Status Pembayaran']).size().unstack(fill_value=0).reset_index()
-            if 'Lunas' not in dom_status.columns:
-                dom_status['Lunas'] = 0
-            if 'Angsuran' not in dom_status.columns:
-                dom_status['Angsuran'] = 0
-            
-            dom_status['Total Siswa'] = dom_status['Lunas'] + dom_status['Angsuran']
-            dom_status['% Lunas'] = (dom_status['Lunas'] / dom_status['Total Siswa'] * 100).round(1)
-            dom_status['% Angsuran'] = (dom_status['Angsuran'] / dom_status['Total Siswa'] * 100).round(1)
-
-            c_dom1, c_dom2 = st.columns([1, 1])
-
-            with c_dom1:
-                st.markdown("##### 📊 Persentase Pembayaran per Kecamatan")
-                dom_melted = dom_status.melt(id_vars='Kec Tinggal', value_vars=['% Lunas', '% Angsuran'], var_name='Status', value_name='Persentase')
-                fig_dom_pct = px.bar(
-                    dom_melted, x='Kec Tinggal', y='Persentase', color='Status', barmode='stack',
-                    text_auto='.1f', template="plotly_dark", color_discrete_map={'% Lunas': '#00cc96', '% Angsuran': '#ef553b'}
-                )
-                st.plotly_chart(fig_dom_pct, use_container_width=True)
-
-            with c_dom2:
-                st.markdown("##### 📋 Tabel Rincian Domisili (Lunas & Angsuran)")
-                st.dataframe(dom_status[['Kec Tinggal', 'Total Siswa', 'Lunas', 'Angsuran', '% Lunas', '% Angsuran']], use_container_width=True, height=350)
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
 
@@ -372,19 +337,21 @@ with tab4:
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan.")
 
-# --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA (2425 vs 2526 vs 2627) ---
+# --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA ---
 with tab5:
     st.header("📈 Perbandingan Data Siswa & Tren 3 Tahun Ajaran")
-    st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta persentase pembayaran domisili per 3 TA secara otomatis.")
+    st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta pergeseran jenjang antar TA.")
 
     if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
-        df_siswa_all_ta = df_siswa_raw.copy()
+        df_siswa_filtered = df_siswa_raw.copy()
+        if selected_lb != "Semua Cabang / Lokasi":
+            df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
 
         col_ta1, col_ta2 = st.columns(2)
 
         with col_ta1:
             st.subheader("1. Pertumbuhan Jumlah Siswa Terdaftar per TA")
-            siswa_ta = df_siswa_all_ta.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
+            siswa_ta = df_siswa_filtered.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
             siswa_ta.columns = ['Tahun Ajaran', 'Jumlah Siswa']
             
             fig_siswa_ta = px.line(
@@ -396,7 +363,7 @@ with tab5:
 
         with col_ta2:
             st.subheader("2. Komparasi Paket Bimbingan vs Cash In per TA")
-            fin_ta = df_siswa_all_ta.groupby('ta_clean').agg(
+            fin_ta = df_siswa_filtered.groupby('ta_clean').agg(
                 Nilai_Paket=('Biaya Paket', 'sum'),
                 Cash_In=('Total Bayar', 'sum')
             ).reset_index()
@@ -412,43 +379,18 @@ with tab5:
 
         st.divider()
 
-        # Otomatis tanpa filter: Persentase Lunas & Angsuran per Domisili (3 TA)
-        st.subheader("3. Auto-Analisis: Persentase Pembayaran (Lunas vs Angsuran) Berdasarkan Domisili per 3 TA")
-        st.caption("🤖 Tabel & grafik di bawah terakumulasi secara otomatis untuk 3 Tahun Ajaran terakhir tanpa memerlukan filter manual.")
-
-        if 'Kec Tinggal' in df_siswa_all_ta.columns and 'Status Pembayaran' in df_siswa_all_ta.columns:
-            ta_dom_status = df_siswa_all_ta.groupby(['ta_clean', 'Kec Tinggal', 'Status Pembayaran']).size().unstack(fill_value=0).reset_index()
-            if 'Lunas' not in ta_dom_status.columns:
-                ta_dom_status['Lunas'] = 0
-            if 'Angsuran' not in ta_dom_status.columns:
-                ta_dom_status['Angsuran'] = 0
-            
-            ta_dom_status['Total Siswa'] = ta_dom_status['Lunas'] + ta_dom_status['Angsuran']
-            ta_dom_status['% Lunas'] = (ta_dom_status['Lunas'] / ta_dom_status['Total Siswa'] * 100).round(1)
-            ta_dom_status['% Angsuran'] = (ta_dom_status['Angsuran'] / ta_dom_status['Total Siswa'] * 100).round(1)
-            ta_dom_status.rename(columns={'ta_clean': 'Tahun Ajaran (TA)', 'Kec Tinggal': 'Kecamatan / Domisili'}, inplace=True)
-
-            c_ta_dom1, c_ta_dom2 = st.columns([3, 2])
-
-            with c_ta_dom1:
-                fig_ta_dom = px.bar(
-                    ta_dom_status, x='Kecamatan / Domisili', y='% Lunas', color='Tahun Ajaran (TA)',
-                    barmode='group', text_auto='.1f', template="plotly_dark",
-                    title="Perbandingan Persentase Konsumen LUNAS per Domisili (3 TA)"
-                )
-                st.plotly_chart(fig_ta_dom, use_container_width=True)
-
-            with c_ta_dom2:
-                st.write("📋 **Tabel Komparasi Auto 3 TA (Lunas vs Angsuran per Domisili)**")
-                st.dataframe(
-                    ta_dom_status[['Tahun Ajaran (TA)', 'Kecamatan / Domisili', 'Total Siswa', 'Lunas', 'Angsuran', '% Lunas', '% Angsuran']],
-                    use_container_width=True, height=400
-                )
+        st.subheader("3. Perbandingan Sebaran Jenjang Kelas Antar TA")
+        jenjang_ta = df_siswa_filtered.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah Siswa')
+        fig_jenjang_ta = px.bar(
+            jenjang_ta, x='ta_clean', y='Jumlah Siswa', color='Jenjang', barmode='group',
+            template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'}
+        )
+        st.plotly_chart(fig_jenjang_ta, use_container_width=True)
 
         st.divider()
 
         st.subheader("4. Rekapitulasi Data Siswa Multi-Tahun Ajaran")
-        rekap_ta = df_siswa_all_ta.groupby('ta_clean').agg(
+        rekap_ta = df_siswa_filtered.groupby('ta_clean').agg(
             Total_Siswa=('No', 'count'),
             Total_Paket=('Biaya Paket', 'sum'),
             Total_Bayar=('Total Bayar', 'sum'),
@@ -461,3 +403,106 @@ with tab5:
 
     else:
         st.warning("Data Siswa Multi-TA belum tersedia.")
+
+# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI (OTOMATIS TANPA FILTER) ---
+with tab6:
+    st.header("📊 Analisis Otomatis Persentase Lunas & Angsuran Berdasarkan Domisili")
+    st.info("💡 **Fitur Otomatis Multi-TA:** Menghitung secara langsung persentase konsumen per Lokasi Belajar yang membayar Lunas vs Angsuran berdasarkan domisili (Kecamatan & Kelurahan) selama 3 TA terakhir secara utuh.")
+
+    if not df_siswa_raw.empty and 'Kec Tinggal' in df_siswa_raw.columns:
+        df_status = df_siswa_raw.copy()
+        
+        # Determine Status Bayar (Tagihan >= 0 -> Lunas, else Angsuran)
+        df_status['Status_Bayar'] = df_status['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
+        
+        if 'ta_clean' not in df_status.columns:
+            df_status['ta_clean'] = df_status['TA'].apply(clean_str)
+        if 'lb_clean' not in df_status.columns:
+            df_status['lb_clean'] = df_status['lb'].apply(clean_str)
+
+        # Overview Metrics Overall
+        col_st1, col_st2, col_st3, col_st4 = st.columns(4)
+        total_s = len(df_status)
+        total_lunas = len(df_status[df_status['Status_Bayar'] == 'Lunas'])
+        total_angsuran = len(df_status[df_status['Status_Bayar'] == 'Angsuran'])
+        
+        col_st1.metric("Total Siswa Teranalisis", f"{total_s} Siswa")
+        col_st2.metric("Siswa Lunas", f"{total_lunas} Siswa ({round(total_lunas/total_s*100,1) if total_s>0 else 0}%)")
+        col_st3.metric("Siswa Angsuran", f"{total_angsuran} Siswa ({round(total_angsuran/total_s*100,1) if total_s>0 else 0}%)")
+        col_st4.metric("Jumlah Kecamatan Domisili", f"{df_status['Kec Tinggal'].nunique()} Kecamatan")
+
+        st.divider()
+
+        # Visualisasi Grafik Persentase Lunas vs Angsuran per Kecamatan
+        st.subheader("1. Grafik Persentase Status Bayar per Kecamatan Domisili & Lokasi Belajar")
+        kec_summary = df_status.groupby(['lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().reset_index(name='Jumlah')
+        
+        fig_status_kec = px.bar(
+            kec_summary, 
+            x='Kec Tinggal', 
+            y='Jumlah', 
+            color='Status_Bayar', 
+            barmode='stack',
+            facet_col='lb_clean',
+            text_auto=True,
+            color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'},
+            template="plotly_dark",
+            labels={'Kec Tinggal': 'Kecamatan Domisili', 'lb_clean': 'Cabang'}
+        )
+        st.plotly_chart(fig_status_kec, use_container_width=True)
+
+        st.divider()
+
+        # Tabel 1: Rekap Otomatis per Kecamatan (Per TA & Cabang)
+        st.subheader("2. Tabel Rincian Persentase per Kecamatan Domisili (Per TA & Cabang)")
+        
+        rekap_kec = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
+        
+        if 'Lunas' not in rekap_kec.columns:
+            rekap_kec['Lunas'] = 0
+        if 'Angsuran' not in rekap_kec.columns:
+            rekap_kec['Angsuran'] = 0
+
+        rekap_kec['Total Siswa'] = rekap_kec['Lunas'] + rekap_kec['Angsuran']
+        rekap_kec['% Lunas'] = (rekap_kec['Lunas'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
+        rekap_kec['% Angsuran'] = (rekap_kec['Angsuran'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
+
+        rekap_kec = rekap_kec.rename(columns={
+            'ta_clean': 'Tahun Ajaran (TA)',
+            'lb_clean': 'Cabang (Lb)',
+            'Kec Tinggal': 'Kecamatan Domisili',
+            'Lunas': 'Jumlah Lunas',
+            'Angsuran': 'Jumlah Angsuran'
+        })
+        
+        st.dataframe(rekap_kec, use_container_width=True)
+
+        st.divider()
+
+        # Tabel 2: Rekap Otomatis per Kelurahan (Per TA & Cabang)
+        st.subheader("3. Tabel Rincian Persentase per Kelurahan Domisili (Per TA & Cabang)")
+        
+        rekap_kel = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Kel Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
+        
+        if 'Lunas' not in rekap_kel.columns:
+            rekap_kel['Lunas'] = 0
+        if 'Angsuran' not in rekap_kel.columns:
+            rekap_kel['Angsuran'] = 0
+
+        rekap_kel['Total Siswa'] = rekap_kel['Lunas'] + rekap_kel['Angsuran']
+        rekap_kel['% Lunas'] = (rekap_kel['Lunas'] / rekap_kel['Total Siswa'] * 100).round(1).astype(str) + '%'
+        rekap_kel['% Angsuran'] = (rekap_kel['Angsuran'] / rekap_kel['Total Siswa'] * 100).round(1).astype(str) + '%'
+
+        rekap_kel = rekap_kel.rename(columns={
+            'ta_clean': 'Tahun Ajaran (TA)',
+            'lb_clean': 'Cabang (Lb)',
+            'Kecamatan': 'Kecamatan',
+            'Kel Tinggal': 'Kelurahan Domisili',
+            'Lunas': 'Jumlah Lunas',
+            'Angsuran': 'Jumlah Angsuran'
+        })
+        
+        st.dataframe(rekap_kel, use_container_width=True)
+
+    else:
+        st.warning("Data Siswa untuk analisis status bayar domisili belum tersedia.")
