@@ -30,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
-st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili (2425, 2526, 2627)")
+st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, Status Siswa, & Status Bayar Domisili (2425, 2526, 2627)")
 
 # ---------------------------------------------------------
 # AUTHENTICATION & LOGIN ADMIN (SIDEBAR)
@@ -72,12 +72,28 @@ def clean_str(val):
         return None
     return str(int(val)) if isinstance(val, (int, float)) else str(val).strip()
 
+# Helper Kategori Siswa berdasarkan Biaya Formulir
+def get_kategori_siswa(biaya):
+    try:
+        biaya = float(biaya)
+    except:
+        return 'Lainnya'
+    if biaya == 50000:
+        return 'Siswa Lama (Rp50k)'
+    elif biaya == 300000:
+        return 'Siswa Baru (Rp300k)'
+    elif biaya == 200000:
+        return 'Siswa NFIC (Rp200k)'
+    elif biaya == 0:
+        return 'Lainnya / Gratis (Rp0)'
+    else:
+        return f'Lainnya (Rp{int(biaya):,})'
+
 # Helper Function Auto-Load Files dari GitHub Repository jika tidak ada upload manual
 def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
         return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
     
-    # Auto-scan seluruh file .xlsx di folder GitHub yang sesuai kata kunci
     all_excel_files = glob.glob("*.xlsx")
     matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords)]
     
@@ -92,21 +108,6 @@ def load_combined_data(uploaded_files, filename_keywords):
             return pd.concat(dfs, ignore_index=True)
     return pd.DataFrame()
 
-# Helper Function Mapping Kategori Siswa berdasarkan Biaya Formulir / Biaya F
-def get_kategori_siswa(biaya):
-    try:
-        val = float(biaya)
-        if val == 50000:
-            return 'Siswa Lama'
-        elif val == 300000:
-            return 'Siswa Baru'
-        elif val == 200000:
-            return 'Siswa Baru NFIC'
-        else:
-            return 'Lainnya'
-    except:
-        return 'Lainnya'
-
 # ---------------------------------------------------------
 # LOAD & COMBINE DATASETS AUTOMATICALLY
 # ---------------------------------------------------------
@@ -114,14 +115,14 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
-# Standarisasi Kolom Lb, TA, dan Kategori Siswa untuk Filtering
+# Standarisasi Kolom Lb, TA, dan Kategori Siswa
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(clean_str)
     if 'Idtahun' in df_trx_raw.columns:
         df_trx_raw['ta_clean'] = df_trx_raw['Idtahun'].apply(clean_str)
     if 'Biaya F' in df_trx_raw.columns:
-        df_trx_raw['Kategori Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
+        df_trx_raw['Kategori_Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
 
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
@@ -129,7 +130,7 @@ if not df_siswa_raw.empty:
     if 'TA' in df_siswa_raw.columns:
         df_siswa_raw['ta_clean'] = df_siswa_raw['TA'].apply(clean_str)
     if 'Biaya Formulir' in df_siswa_raw.columns:
-        df_siswa_raw['Kategori Siswa'] = df_siswa_raw['Biaya Formulir'].apply(get_kategori_siswa)
+        df_siswa_raw['Kategori_Siswa'] = df_siswa_raw['Biaya Formulir'].apply(get_kategori_siswa)
 
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
@@ -251,11 +252,19 @@ with tab1:
             fig_pie = px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4, template="plotly_dark")
             st.plotly_chart(fig_pie, use_container_width=True)
 
-        st.subheader("Pendapatan per Kode Lokasi (Lb)")
-        lb_summary = df_trx.groupby('Lb')['Jumlah'].sum().reset_index()
-        lb_summary['Lb'] = lb_summary['Lb'].astype(str)
-        fig_bar = px.bar(lb_summary, x='Lb', y='Jumlah', color='Jumlah', text_auto='.2s', template="plotly_dark")
-        st.plotly_chart(fig_bar, use_container_width=True)
+        st.divider()
+
+        # Visualisasi Baru: Kategori Siswa berdasarkan Biaya F (Data Transaksi)
+        if 'Kategori_Siswa' in df_trx.columns:
+            st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
+            kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
+            kat_trx_df.columns = ['Status Siswa', 'Jumlah Transaksi']
+            fig_kat_trx = px.bar(
+                kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi',
+                color='Status Siswa', template="plotly_dark"
+            )
+            st.plotly_chart(fig_kat_trx, use_container_width=True)
+
     else:
         st.warning(f"Data Transaksi tidak ditemukan untuk filter terpilih.")
 
@@ -272,22 +281,23 @@ with tab2:
 
         c1, c2 = st.columns(2)
         with c1:
+            st.subheader("Distribusi Status Siswa (Biaya Formulir)")
+            if 'Kategori_Siswa' in df_siswa.columns:
+                kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
+                kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
+                fig_kat_siswa = px.bar(
+                    kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah',
+                    color='Status Siswa', template="plotly_dark"
+                )
+                st.plotly_chart(fig_kat_siswa, use_container_width=True)
+
+        with c2:
             st.subheader("Distribusi Jenjang Kelas")
             jenjang_df = df_siswa['Jenjang'].value_counts().reset_index()
             jenjang_df.columns = ['Jenjang', 'Jumlah']
             fig_jenjang = px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah', template="plotly_dark")
             st.plotly_chart(fig_jenjang, use_container_width=True)
 
-        with c2:
-            st.subheader("Distribusi Kategori Siswa (Biaya Formulir)")
-            if 'Kategori Siswa' in df_siswa.columns:
-                kat_df = df_siswa['Kategori Siswa'].value_counts().reset_index()
-                kat_df.columns = ['Kategori', 'Jumlah']
-                fig_kat = px.pie(kat_df, names='Kategori', values='Jumlah', hole=0.3, template="plotly_dark",
-                                 color='Kategori', color_discrete_map={'Siswa Lama': '#36A2EB', 'Siswa Baru': '#FF6384', 'Siswa Baru NFIC': '#FFCE56', 'Lainnya': '#9966FF'})
-                st.plotly_chart(fig_kat, use_container_width=True)
-            else:
-                st.info("Informasi Kategori Siswa tidak tersedia.")
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
 
@@ -363,7 +373,7 @@ with tab4:
 # --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA ---
 with tab5:
     st.header("📈 Perbandingan Data Siswa & Tren 3 Tahun Ajaran")
-    st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, kategori pendaftaran (Lama/Baru/NFIC), serta finansial antar TA.")
+    st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta pergeseran jenjang & status siswa antar TA.")
 
     if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
         df_siswa_filtered = df_siswa_raw.copy()
@@ -385,32 +395,32 @@ with tab5:
             st.plotly_chart(fig_siswa_ta, use_container_width=True)
 
         with col_ta2:
-            st.subheader("2. Perbandingan Kategori Siswa (Lama / Baru / NFIC) per TA")
-            if 'Kategori Siswa' in df_siswa_filtered.columns:
-                kat_ta = df_siswa_filtered.groupby(['ta_clean', 'Kategori Siswa']).size().reset_index(name='Jumlah Siswa')
-                fig_kat_ta = px.bar(
-                    kat_ta, x='ta_clean', y='Jumlah Siswa', color='Kategori Siswa', barmode='group', text_auto=True,
-                    template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'},
-                    color_discrete_map={'Siswa Lama': '#36A2EB', 'Siswa Baru': '#FF6384', 'Siswa Baru NFIC': '#FFCE56', 'Lainnya': '#9966FF'}
-                )
-                st.plotly_chart(fig_kat_ta, use_container_width=True)
+            st.subheader("2. Komparasi Paket Bimbingan vs Cash In per TA")
+            fin_ta = df_siswa_filtered.groupby('ta_clean').agg(
+                Nilai_Paket=('Biaya Paket', 'sum'),
+                Cash_In=('Total Bayar', 'sum')
+            ).reset_index()
+            fin_ta_melted = fin_ta.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], 
+                                        var_name='Kategori', value_name='Nominal')
+            fin_ta_melted['Kategori'] = fin_ta_melted['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In'})
+            
+            fig_fin_ta = px.bar(
+                fin_ta_melted, x='ta_clean', y='Nominal', color='Kategori', barmode='group',
+                text_auto='.3s', template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'}
+            )
+            st.plotly_chart(fig_fin_ta, use_container_width=True)
 
         st.divider()
 
-        st.subheader("3. Komparasi Paket Bimbingan vs Cash In per TA")
-        fin_ta = df_siswa_filtered.groupby('ta_clean').agg(
-            Nilai_Paket=('Biaya Paket', 'sum'),
-            Cash_In=('Total Bayar', 'sum')
-        ).reset_index()
-        fin_ta_melted = fin_ta.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], 
-                                    var_name='Kategori', value_name='Nominal')
-        fin_ta_melted['Kategori'] = fin_ta_melted['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In'})
-        
-        fig_fin_ta = px.bar(
-            fin_ta_melted, x='ta_clean', y='Nominal', color='Kategori', barmode='group',
-            text_auto='.3s', template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'}
-        )
-        st.plotly_chart(fig_fin_ta, use_container_width=True)
+        # Section Tambahan: Perbandingan Status Siswa (Lama/Baru/NFIC) per TA
+        if 'Kategori_Siswa' in df_siswa_filtered.columns:
+            st.subheader("3. Perbandingan Status Siswa (Lama / Baru / NFIC) Antar TA")
+            kat_ta = df_siswa_filtered.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah Siswa')
+            fig_kat_ta = px.bar(
+                kat_ta, x='ta_clean', y='Jumlah Siswa', color='Kategori_Siswa', barmode='group',
+                text_auto=True, template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'}
+            )
+            st.plotly_chart(fig_kat_ta, use_container_width=True)
 
         st.divider()
 
@@ -437,7 +447,6 @@ with tab6:
     if not df_siswa_raw.empty and 'Kec Tinggal' in df_siswa_raw.columns:
         df_status = df_siswa_raw.copy()
         
-        # Determine Status Bayar (Tagihan >= 0 -> Lunas, else Angsuran)
         df_status['Status_Bayar'] = df_status['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
         
         if 'ta_clean' not in df_status.columns:
@@ -477,7 +486,6 @@ with tab6:
         st.divider()
 
         st.subheader("2. Tabel Rincian Persentase per Kecamatan Domisili (Per TA & Cabang)")
-        
         rekap_kec = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
         
         if 'Lunas' not in rekap_kec.columns:
@@ -502,7 +510,6 @@ with tab6:
         st.divider()
 
         st.subheader("3. Tabel Rincian Persentase per Kelurahan Domisili (Per TA & Cabang)")
-        
         rekap_kel = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Kel Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
         
         if 'Lunas' not in rekap_kel.columns:
