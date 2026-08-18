@@ -99,6 +99,10 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
+# Standarisasi Status Pembayaran (Lunas vs Angsuran)
+if not df_siswa_raw.empty and 'Tagihan' in df_siswa_raw.columns:
+    df_siswa_raw['Status Pembayaran'] = df_siswa_raw['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
+
 # Standarisasi Kolom Lb dan TA untuk Filtering
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
@@ -164,9 +168,16 @@ if not df_diskon.empty:
     if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['lb_clean'] == selected_lb]
 
-# Sub-Filters Spesifik Domisili & Diskon
+# Sub-Filters Spesifik Status Bayar, Domisili & Diskon
 st.sidebar.divider()
 st.sidebar.header("🔍 Filter Detail")
+
+if not df_siswa.empty and 'Status Pembayaran' in df_siswa.columns:
+    st.sidebar.subheader("Status Pembayaran")
+    list_status_bayar = ["Semua Status", "Lunas", "Angsuran"]
+    selected_status = st.sidebar.selectbox("Pilih Status Pembayaran:", list_status_bayar)
+    if selected_status != "Semua Status":
+        df_siswa = df_siswa[df_siswa['Status Pembayaran'] == selected_status]
 
 if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
     st.sidebar.subheader("Domisili Siswa")
@@ -271,6 +282,7 @@ with tab2:
 with tab3:
     if not df_siswa.empty:
         st.header("🏫 Analisis Asal Sekolah & Domisili Siswa")
+        
         st.subheader("1. Top Asal Sekolah Pendaftar")
         c1, c2 = st.columns([2, 1])
         with c1:
@@ -306,6 +318,50 @@ with tab3:
             kel_df.columns = ['Kelurahan', 'Jumlah Siswa']
             fig_kel = px.bar(kel_df, x='Kelurahan', y='Jumlah Siswa', text='Jumlah Siswa', color='Jumlah Siswa', template="plotly_dark")
             st.plotly_chart(fig_kel, use_container_width=True)
+
+        st.divider()
+
+        # ANALISIS PERSENTASE LUNAS VS ANGSURAN PER DOMISILI
+        st.subheader("3. Persentase Status Pembayaran (Lunas vs Angsuran) Berdasarkan Domisili")
+        col_p1, col_p2 = st.columns(2)
+
+        with col_p1:
+            st.markdown("##### 📊 Persentase Lunas vs Angsuran per Kecamatan")
+            kec_summary = df_siswa.groupby('Kec Tinggal').agg(
+                Total_Siswa=('No', 'count'),
+                Lunas=('Status Pembayaran', lambda x: (x == 'Lunas').sum()),
+                Angsuran=('Status Pembayaran', lambda x: (x == 'Angsuran').sum())
+            ).reset_index()
+            kec_summary['% Lunas'] = (kec_summary['Lunas'] / kec_summary['Total_Siswa'] * 100).round(1)
+            kec_summary['% Angsuran'] = (kec_summary['Angsuran'] / kec_summary['Total_Siswa'] * 100).round(1)
+
+            kec_melted = kec_summary.melt(
+                id_vars=['Kec Tinggal', 'Total_Siswa'], 
+                value_vars=['% Lunas', '% Angsuran'], 
+                var_name='Status Pembayaran', 
+                value_name='Persentase'
+            )
+            fig_kec_status = px.bar(
+                kec_melted, x='Kec Tinggal', y='Persentase', color='Status Pembayaran', 
+                text='Persentase', barmode='stack', template="plotly_dark",
+                color_discrete_map={'% Lunas': '#00cc96', '% Angsuran': '#ef553b'},
+                labels={'Kec Tinggal': 'Kecamatan', 'Persentase': 'Persentase (%)'}
+            )
+            fig_kec_status.update_traces(texttemplate='%{text:.1f}%', textposition='inside')
+            st.plotly_chart(fig_kec_status, use_container_width=True)
+
+        with col_p2:
+            st.markdown("##### 📋 Tabel Rincian Pembayaran per Kelurahan")
+            kel_summary = df_siswa.groupby('Kel Tinggal').agg(
+                Total_Siswa=('No', 'count'),
+                Lunas=('Status Pembayaran', lambda x: (x == 'Lunas').sum()),
+                Angsuran=('Status Pembayaran', lambda x: (x == 'Angsuran').sum())
+            ).reset_index()
+            kel_summary['% Lunas'] = (kel_summary['Lunas'] / kel_summary['Total_Siswa'] * 100).round(1)
+            kel_summary['% Angsuran'] = (kel_summary['Angsuran'] / kel_summary['Total_Siswa'] * 100).round(1)
+            kel_summary.columns = ['Kelurahan', 'Total Siswa', 'Jumlah Lunas', 'Jumlah Angsuran', '% Lunas', '% Angsuran']
+            st.dataframe(kel_summary.sort_values(by='Total Siswa', ascending=False), use_container_width=True, height=380)
+
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
 
