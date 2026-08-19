@@ -10,21 +10,39 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling (Fix Teks Terang di Light & Dark Mode)
+# Custom Styling Adaptive Theme (Support Light, Dark, & System Mode)
 st.markdown("""
     <style>
+    /* Styling Metric Cards Adaptive Theme & Auto-Fit Text */
     div[data-testid="stMetric"] {
-        background-color: #1f2937 !important;
-        padding: 15px !important;
-        border-radius: 10px !important;
-        border: 1px solid #374151 !important;
+        background-color: var(--secondary-background-color) !important;
+        padding: 16px !important;
+        border-radius: 12px !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03) !important;
+        transition: all 0.3s ease !important;
     }
     div[data-testid="stMetricLabel"] > div {
-        color: #9ca3af !important;
+        color: var(--text-color) !important;
+        opacity: 0.85 !important;
         font-weight: 600 !important;
+        font-size: 0.95rem !important;
     }
     div[data-testid="stMetricValue"] > div {
-        color: #ffffff !important;
+        color: var(--text-color) !important;
+        font-weight: 700 !important;
+        font-size: clamp(1.05rem, 1.7vw, 1.55rem) !important;
+        white-space: normal !important;
+        word-break: break-word !important;
+        line-height: 1.25 !important;
+    }
+    
+    /* Custom Styling Alert Info Banner Adaptive */
+    div[data-testid="stAlert"] {
+        background-color: var(--secondary-background-color) !important;
+        color: var(--text-color) !important;
+        border: 1px solid rgba(128, 128, 128, 0.2) !important;
+        border-radius: 10px !important;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -52,6 +70,15 @@ JENJANG_MAP = {
     'N': '12 SMA',
     'O': 'RONIN'
 }
+
+# Helper Function Plotly Transparent Adaptive
+def style_chart(fig):
+    fig.update_layout(
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=20, r=20, t=40, b=20)
+    )
+    return fig
 
 # ---------------------------------------------------------
 # AUTHENTICATION & LOGIN ADMIN (SIDEBAR)
@@ -105,7 +132,6 @@ def format_jenjang(val):
     clean_val = str(val).strip().upper()
     return JENJANG_MAP.get(clean_val, clean_val)
 
-# Helper Kategori Siswa berdasarkan Biaya Formulir
 def get_kategori_siswa(biaya):
     try:
         biaya = float(biaya)
@@ -122,7 +148,6 @@ def get_kategori_siswa(biaya):
     else:
         return f'Lainnya (Rp{int(biaya):,})'
 
-# Helper Function Auto-Load Files
 def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
         return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
@@ -148,7 +173,6 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
-# Standarisasi Kolom
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -177,7 +201,6 @@ if not df_diskon_raw.empty:
 st.sidebar.divider()
 st.sidebar.header("📍 Master Filter Dashboard")
 
-# 1. Master Filter Tahun Ajaran (TA)
 all_ta_set = set()
 if 'ta_clean' in df_trx_raw.columns:
     all_ta_set.update(df_trx_raw['ta_clean'].dropna())
@@ -187,7 +210,6 @@ if 'ta_clean' in df_siswa_raw.columns:
 list_master_ta = ["Semua Tahun Ajaran"] + sorted(list(all_ta_set))
 selected_ta = st.sidebar.selectbox("📅 Pilih Tahun Ajaran (TA):", list_master_ta)
 
-# 2. Master Filter Lokasi Cabang (Lb)
 all_lb_set = set()
 if 'lb_clean' in df_trx_raw.columns:
     all_lb_set.update(df_trx_raw['lb_clean'].dropna())
@@ -199,7 +221,6 @@ if 'lb_clean' in df_diskon_raw.columns:
 list_master_lb = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
 selected_lb = st.sidebar.selectbox("🏢 Pilih Lokasi Belajar:", list_master_lb)
 
-# Apply Filter TA & Lb to Dataframes
 df_trx = df_trx_raw.copy()
 if not df_trx.empty:
     if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_trx.columns:
@@ -219,7 +240,6 @@ if not df_diskon.empty:
     if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['lb_clean'] == selected_lb]
 
-# Sub-Filters Spesifik Domisili & Diskon
 st.sidebar.divider()
 st.sidebar.header("🔍 Filter Detail")
 
@@ -254,7 +274,6 @@ if not df_diskon.empty and 'Nama Diskon' in df_diskon.columns:
     if selected_nama_diskon != "Semua Jenis Diskon":
         df_diskon = df_diskon[df_diskon['Nama Diskon'] == selected_nama_diskon]
 
-# Banner Indikator Filter
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
 dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
@@ -291,12 +310,12 @@ with tab1:
             st.subheader("Tren Pendapatan Harian")
             df_trx['Tanggal'] = pd.to_datetime(df_trx['Tanggal'])
             daily_trx = df_trx.groupby('Tanggal')['Jumlah'].sum().reset_index()
-            fig_line = px.line(daily_trx, x='Tanggal', y='Jumlah', markers=True, template="plotly_dark")
+            fig_line = style_chart(px.line(daily_trx, x='Tanggal', y='Jumlah', markers=True))
             st.plotly_chart(fig_line, use_container_width=True)
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
-            fig_pie = px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4, template="plotly_dark")
+            fig_pie = style_chart(px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4))
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
@@ -305,10 +324,10 @@ with tab1:
             st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
             kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
             kat_trx_df.columns = ['Status Siswa', 'Jumlah Transaksi']
-            fig_kat_trx = px.bar(
+            fig_kat_trx = style_chart(px.bar(
                 kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi',
-                color='Status Siswa', template="plotly_dark"
-            )
+                color='Status Siswa'
+            ))
             st.plotly_chart(fig_kat_trx, use_container_width=True)
 
     else:
@@ -331,17 +350,17 @@ with tab2:
             if 'Kategori_Siswa' in df_siswa.columns:
                 kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
                 kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
-                fig_kat_siswa = px.bar(
+                fig_kat_siswa = style_chart(px.bar(
                     kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah',
-                    color='Status Siswa', template="plotly_dark"
-                )
+                    color='Status Siswa'
+                ))
                 st.plotly_chart(fig_kat_siswa, use_container_width=True)
 
         with c2:
             st.subheader("Distribusi Jenjang Kelas")
             jenjang_df = df_siswa['Jenjang'].value_counts().reset_index()
             jenjang_df.columns = ['Jenjang', 'Jumlah']
-            fig_jenjang = px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah', template="plotly_dark")
+            fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
 
     else:
@@ -356,10 +375,10 @@ with tab3:
         with c1:
             top_sekolah = df_siswa['Asal Sekolah'].value_counts().head(10).reset_index()
             top_sekolah.columns = ['Asal Sekolah', 'Jumlah Siswa']
-            fig_sekolah = px.bar(
+            fig_sekolah = style_chart(px.bar(
                 top_sekolah, y='Asal Sekolah', x='Jumlah Siswa', orientation='h', 
-                text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis', template="plotly_dark"
-            )
+                text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis'
+            ))
             fig_sekolah.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_sekolah, use_container_width=True)
 
@@ -379,16 +398,15 @@ with tab3:
             jenjang_kec['Persentase'] = (jenjang_kec['Jumlah_Siswa'] / total_kec * 100).round(1)
             jenjang_kec['Label_Text'] = jenjang_kec.apply(lambda r: f"{r['Jumlah_Siswa']} ({r['Persentase']}%)", axis=1)
 
-            fig_jenjang_kec = px.bar(
+            fig_jenjang_kec = style_chart(px.bar(
                 jenjang_kec,
                 x='Kec Tinggal',
                 y='Jumlah_Siswa',
                 color='Jenjang',
                 barmode='group',
                 text='Label_Text',
-                template="plotly_dark",
                 labels={'Kec Tinggal': 'Kecamatan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}
-            )
+            ))
             fig_jenjang_kec.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kec, use_container_width=True)
 
@@ -401,16 +419,15 @@ with tab3:
             jenjang_kel['Persentase'] = (jenjang_kel['Jumlah_Siswa'] / total_kel * 100).round(1)
             jenjang_kel['Label_Text'] = jenjang_kel.apply(lambda r: f"{r['Jumlah_Siswa']} ({r['Persentase']}%)", axis=1)
 
-            fig_jenjang_kel = px.bar(
+            fig_jenjang_kel = style_chart(px.bar(
                 jenjang_kel,
                 x='Kel Tinggal',
                 y='Jumlah_Siswa',
                 color='Jenjang',
                 barmode='group',
                 text='Label_Text',
-                template="plotly_dark",
                 labels={'Kel Tinggal': 'Kelurahan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}
-            )
+            ))
             fig_jenjang_kel.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kel, use_container_width=True)
 
@@ -433,18 +450,18 @@ with tab4:
         with c1:
             diskon_type = df_diskon['Nama Diskon'].value_counts().reset_index()
             diskon_type.columns = ['Nama Diskon', 'Jumlah Siswa']
-            fig_diskon_pie = px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4, template="plotly_dark")
+            fig_diskon_pie = style_chart(px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4))
             st.plotly_chart(fig_diskon_pie, use_container_width=True)
 
         with c2:
             diskon_lokasi = df_diskon.groupby('lb_clean')['Besar Diskon'].sum().reset_index()
             diskon_lokasi.columns = ['Lokasi Belajar', 'Besar Diskon']
-            fig_diskon_bar = px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon', template="plotly_dark")
+            fig_diskon_bar = style_chart(px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon'))
             st.plotly_chart(fig_diskon_bar, use_container_width=True)
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan.")
 
-# --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA (TERSINKRONISASI KECAMATAN & KELURAHAN) ---
+# --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA ---
 with tab5:
     st.header("📈 Perbandingan Data Siswa & Tren 3 Tahun Ajaran")
     st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta pergeseran jenjang & status siswa antar TA.")
@@ -452,7 +469,6 @@ with tab5:
     if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
         df_siswa_filtered = df_siswa_raw.copy()
         
-        # Sinkronisasi Filter Lokasi Belajar, Kecamatan, dan Kelurahan untuk Tab 5 (Tanpa memfilter TA)
         if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_siswa_filtered.columns:
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
             
@@ -470,10 +486,10 @@ with tab5:
                 siswa_ta = df_siswa_filtered.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
                 siswa_ta.columns = ['Tahun Ajaran', 'Jumlah Siswa']
                 
-                fig_siswa_ta = px.line(
+                fig_siswa_ta = style_chart(px.line(
                     siswa_ta, x='Tahun Ajaran', y='Jumlah Siswa', markers=True, 
-                    text='Jumlah Siswa', template="plotly_dark", color_discrete_sequence=['#00cc96']
-                )
+                    text='Jumlah Siswa', color_discrete_sequence=['#00cc96']
+                ))
                 fig_siswa_ta.update_traces(textposition="top center", line=dict(width=3))
                 st.plotly_chart(fig_siswa_ta, use_container_width=True)
 
@@ -487,22 +503,21 @@ with tab5:
                                             var_name='Kategori', value_name='Nominal')
                 fin_ta_melted['Kategori'] = fin_ta_melted['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In'})
                 
-                fig_fin_ta = px.bar(
+                fig_fin_ta = style_chart(px.bar(
                     fin_ta_melted, x='ta_clean', y='Nominal', color='Kategori', barmode='group',
-                    text_auto='.3s', template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran'}
-                )
+                    text_auto='.3s', labels={'ta_clean': 'Tahun Ajaran'}
+                ))
                 st.plotly_chart(fig_fin_ta, use_container_width=True)
 
             st.divider()
 
-            # Chart Status Siswa (Lama / Baru / NFIC) tersinkronisasi penuh dengan Kecamatan & Kelurahan
             if 'Kategori_Siswa' in df_siswa_filtered.columns:
                 st.subheader("3. Perbandingan Status Siswa (Lama / Baru / NFIC) Antar TA")
                 kat_ta = df_siswa_filtered.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah Siswa')
-                fig_kat_ta = px.bar(
+                fig_kat_ta = style_chart(px.bar(
                     kat_ta, x='ta_clean', y='Jumlah Siswa', color='Kategori_Siswa', barmode='group',
-                    text_auto=True, template="plotly_dark", labels={'ta_clean': 'Tahun Ajaran', 'Kategori_Siswa': 'Status Siswa'}
-                )
+                    text_auto=True, labels={'ta_clean': 'Tahun Ajaran', 'Kategori_Siswa': 'Status Siswa'}
+                ))
                 st.plotly_chart(fig_kat_ta, use_container_width=True)
 
             st.divider()
@@ -558,7 +573,7 @@ with tab6:
 
         dom_summary = df_status.groupby(['lb_clean', domisili_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
         
-        fig_status_dom = px.bar(
+        fig_status_dom = style_chart(px.bar(
             dom_summary, 
             x=domisili_col, 
             y='Jumlah', 
@@ -567,9 +582,8 @@ with tab6:
             facet_col='lb_clean',
             text_auto=True,
             color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'},
-            template="plotly_dark",
             labels={domisili_col: f'{domisili_label} Domisili', 'lb_clean': 'Lokasi Belajar'}
-        )
+        ))
         st.plotly_chart(fig_status_dom, use_container_width=True)
 
         st.divider()
