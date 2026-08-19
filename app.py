@@ -2,6 +2,8 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import glob
+import json
+import urllib.request
 
 # Konfigurasi Halaman Web
 st.set_page_config(
@@ -11,7 +13,7 @@ st.set_page_config(
 )
 
 # Custom Styling Adaptive Theme (Support Light, Dark, & System Mode)
-st.markdown("""
+st.markdown('''
     <style>
     /* Styling Metric Cards Adaptive Theme & Auto-Fit Text */
     div[data-testid="stMetric"] {
@@ -45,7 +47,7 @@ st.markdown("""
         border-radius: 10px !important;
     }
     </style>
-""", unsafe_allow_html=True)
+''', unsafe_allow_html=True)
 
 # Pemetaan Kode Lokasi Belajar -> Nama Lokasi
 LOCATION_MAP = {
@@ -76,6 +78,24 @@ def style_chart(fig):
         margin=dict(l=20, r=20, t=40, b=20)
     )
     return fig
+
+# Helper Function Gemini AI API Call
+def ask_gemini_ai(api_key, prompt_text):
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+    headers = {'Content-Type': 'application/json'}
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
+    
+    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers)
+    try:
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            return res_data['candidates'][0]['content']['parts'][0]['text']
+    except Exception as e:
+        return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
 # ---------------------------------------------------------
 # HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
@@ -303,13 +323,14 @@ st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{
 # ---------------------------------------------------------
 # TABS LAYOUT
 # ---------------------------------------------------------
-tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
+tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "💰 Keuangan Transaksi", 
     "🎓 Pendaftaran Siswa", 
     "🏫 Sekolah & Domisili",
     "🏷️ Siswa Diskon Khusus",
     "📈 Perbandingan 3 TA",
-    "📊 Status Bayar Domisili"
+    "📊 Status Bayar Domisili",
+    "🤖 Analisis AI & Executive Summary"
 ])
 
 # --- TAB 1: LAPORAN TRANSAKSI ---
@@ -655,3 +676,102 @@ with tab6:
 
     else:
         st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
+
+# --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY ---
+with tab7:
+    st.header("🤖 Executive AI Analytics & Smart Insights Assistant")
+    st.info("💡 **AI Engine Integration:** Modul ini secara cerdas menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
+
+    if not df_siswa.empty:
+        # 1. OTOMATISASI HIGHLIGHT DATA (SMART STATISTICAL AI INSIGHTS)
+        st.subheader("📌 1. Smart Executive Summary (Otomatis)")
+        
+        tot_siswa = len(df_siswa)
+        tot_paket = df_siswa['Biaya Paket'].sum() if 'Biaya Paket' in df_siswa.columns else 0
+        tot_bayar = df_siswa['Total Bayar'].sum() if 'Total Bayar' in df_siswa.columns else 0
+        tot_tagihan = abs(df_siswa['Tagihan'].sum()) if 'Tagihan' in df_siswa.columns else 0
+        pct_pelunasan = (tot_bayar / tot_paket * 100) if tot_paket > 0 else 0
+        
+        ai_col1, ai_col2, ai_col3 = st.columns(3)
+        ai_col1.metric("💡 Target Paket Bimbingan", f"Rp {tot_paket:,.0f}".replace(',', '.'))
+        ai_col2.metric("💵 Realisasi Cash In", f"Rp {tot_bayar:,.0f}".replace(',', '.'))
+        ai_col3.metric("📊 Rasio Pelunasan", f"{pct_pelunasan:.1f}%")
+
+        st.markdown("### 🔍 Temuan Kunci Sistem:")
+        
+        smart_bullets = []
+        smart_bullets.append(f"**Pertumbuhan & Volume:** Terdata **{tot_siswa} siswa** terdaftar pada filter aktif (**{ta_info}**, **{lb_info}**).")
+        smart_bullets.append(f"**Kinerja Keuangan:** Dari total omset paket **Rp {tot_paket:,.0f}**, penerimaan tunai (Cash In) adalah **Rp {tot_bayar:,.0f} ({pct_pelunasan:.1f}%)**, menyisakan piutang sebesar **Rp {tot_tagihan:,.0f}**.".replace(',', '.'))
+        
+        if 'Asal Sekolah' in df_siswa.columns:
+            top_3_sch = df_siswa['Asal Sekolah'].value_counts().head(3)
+            sch_text = ", ".join([f"**{k}** ({v} siswa)" for k, v in top_3_sch.items()])
+            smart_bullets.append(f"**Sekolah Prioritas:** 3 Sekolah penyumbang siswa terbanyak adalah {sch_text}.")
+            
+        if 'Kec Tinggal' in df_siswa.columns:
+            top_kec = df_siswa['Kec Tinggal'].value_counts().head(3)
+            kec_text = ", ".join([f"**{k}** ({v} siswa)" for k, v in top_kec.items()])
+            smart_bullets.append(f"**Basis Domisili Utama:** Konsentrasi pendaftar tertinggi berasal dari Kecamatan {kec_text}.")
+
+        if 'Kategori_Siswa' in df_siswa.columns:
+            kat_counts = df_siswa['Kategori_Siswa'].value_counts()
+            kat_text = ", ".join([f"{k}: **{v}**" for k, v in kat_counts.items()])
+            smart_bullets.append(f"**Komposisi Status Pendaftar:** Rincian biaya formulir ({kat_text}).")
+
+        for b in smart_bullets:
+            st.markdown(f"- {b}")
+
+        st.divider()
+
+        # 2. INTEGRASI GEMINI AI API UNTUK REKOMENDASI STRATEGIS & LAPORAN NARATIF
+        st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
+        
+        with st.expander("🔑 Pengaturan API Key Google Gemini (Gratis)", expanded=False):
+            st.write("Dapatkan API Key gratis di [Google AI Studio (aistudio.google.com)](https://aistudio.google.com/).")
+            user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
+
+        ctx_lines = [
+            f"Filter Terpilih: {ta_info}, {lb_info}, {dom_info}",
+            f"Total Siswa: {tot_siswa} Siswa",
+            f"Total Nilai Paket Bimbingan: Rp {tot_paket:,.0f}",
+            f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
+            f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
+            f"Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
+        ]
+        if 'Asal Sekolah' in df_siswa.columns:
+            top_sch_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Asal Sekolah'].value_counts().head(5).items()])
+            ctx_lines.append(f"Top Asal Sekolah: {top_sch_str}")
+        if 'Kec Tinggal' in df_siswa.columns:
+            top_kec_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Kec Tinggal'].value_counts().head(5).items()])
+            ctx_lines.append(f"Top Domisili Kecamatan: {top_kec_str}")
+
+        data_context = "\n- ".join([""] + ctx_lines)
+
+        if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
+            if not user_gemini_key:
+                st.warning("⚠️ Silakan masukkan Gemini API Key Anda pada kotak ekspansi di atas untuk menjalankan Analisis AI Generatif.")
+            else:
+                with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
+                    prompt_narrative = f"Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.\nBerdasarkan data operasional & keuangan terbaru berikut:\n{data_context}\n\nTuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresentasikan kepada direksi:\n1. Executive Summary & Evaluasi Kinerja\n2. Analisis Risiko & Piutang Tagihan\n3. Peluang Ekspansi & Marketing\n4. 3 Langkah Strategis Prioritas (Actionable Steps)"
+                    
+                    ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
+                    st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
+                    st.markdown(ai_response)
+
+        st.divider()
+
+        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF SEPUTAR DATA
+        st.subheader("💬 3. Tanya AI Seputar Data Dashboard (Interactive Q&A)")
+        
+        user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
+        if st.button("Tanyakan ke AI", use_container_width=True):
+            if not user_gemini_key:
+                st.warning("⚠️ Silakan masukkan Gemini API Key pada kolom di atas untuk menggunakan fitur Tanya AI.")
+            elif user_question:
+                with st.spinner("🤖 AI sedang memproses pertanyaan Anda..."):
+                    prompt_q = f"Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.\nKonteks data dashboard saat ini:\n{data_context}\n\nPertanyaan Pengguna: '{user_question}'\n\nJawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."
+                    answer = ask_gemini_ai(user_gemini_key, prompt_q)
+                    st.success(f"**Jawaban AI:**\n\n{answer}")
+
+    else:
+        st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
