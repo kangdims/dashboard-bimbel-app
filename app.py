@@ -44,16 +44,6 @@ st.markdown("""
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 10px !important;
     }
-
-    /* Popover Button Styling di Pojok Kanan Atas */
-    div[data-testid="stPopover"] > button {
-        background-color: var(--secondary-background-color) !important;
-        color: var(--text-color) !important;
-        border: 1px solid rgba(128, 128, 128, 0.3) !important;
-        border-radius: 10px !important;
-        font-weight: 600 !important;
-        padding: 8px 16px !important;
-    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -86,6 +76,49 @@ def style_chart(fig):
         margin=dict(l=20, r=20, t=40, b=20)
     )
     return fig
+
+# ---------------------------------------------------------
+# HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
+# ---------------------------------------------------------
+if 'admin_logged_in' not in st.session_state:
+    st.session_state.admin_logged_in = False
+
+files_trx = None
+files_siswa = None
+files_diskon = None
+
+col_head1, col_head2 = st.columns([3.5, 1.2])
+
+with col_head1:
+    st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
+    st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili")
+
+with col_head2:
+    st.write("") # Spacing Alignment
+    if not st.session_state.admin_logged_in:
+        with st.popover("🔑 Login Admin / Upload", use_container_width=True):
+            st.subheader("🔑 Akses Admin")
+            input_user = st.text_input("Username", key="login_user")
+            input_pass = st.text_input("Password", type="password", key="login_pass")
+            if st.button("Login", use_container_width=True):
+                if input_user == "staf612120" and input_pass == "nfms2026%":
+                    st.session_state.admin_logged_in = True
+                    st.success("Login Berhasil!")
+                    st.rerun()
+                else:
+                    st.error("Username atau Password Salah!")
+    else:
+        with st.popover("🔓 Admin Mode (Aktif)", use_container_width=True):
+            st.success("🔓 Mode Admin Aktif")
+            if st.button("Logout Admin", use_container_width=True):
+                st.session_state.admin_logged_in = False
+                st.rerun()
+
+            st.divider()
+            st.subheader("📤 Upload File Excel Baru")
+            files_trx = st.file_uploader("1. Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+            files_siswa = st.file_uploader("2. Data Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+            files_diskon = st.file_uploader("3. Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
 # Helper Function Standarisasi & Mapping
 def clean_str(val):
@@ -140,32 +173,11 @@ def load_combined_data(uploaded_files, filename_keywords):
     return pd.DataFrame()
 
 # ---------------------------------------------------------
-# HEADER UTAMA + POP-UP MENU (POJOK KANAN ATAS)
+# LOAD & COMBINE DATASETS
 # ---------------------------------------------------------
-if 'admin_logged_in' not in st.session_state:
-    st.session_state.admin_logged_in = False
-
-files_trx = None
-files_siswa = None
-files_diskon = None
-
-col_head1, col_head2 = st.columns([3.2, 1.2])
-
-with col_head1:
-    st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
-    st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili")
-
-# State inisialisasi filter awal
-selected_ta = "Semua Tahun Ajaran"
-selected_lb = "Semua Cabang / Lokasi"
-selected_kec = "Semua Kecamatan"
-selected_kel = "Semua Kelurahan"
-selected_nama_diskon = "Semua Jenis Diskon"
-
-# Pre-load data raw untuk memuat daftar filter
-df_trx_raw = load_combined_data(None, ["trx", "laporan", "transaksi"])
-df_siswa_raw = load_combined_data(None, ["siswa", "siswanf"])
-df_diskon_raw = load_combined_data(None, ["diskon"])
+df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
+df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
+df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
@@ -189,92 +201,70 @@ if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
 
-# POP-UP CONTROL CONTAINER (SINGLE CLICK DI POJOK KANAN ATAS)
-with col_head2:
-    st.write("") # Spacing
-    with st.popover("⚙️ Menu & Filter Dashboard", use_container_width=True):
-        st.header("🔑 Akses Admin")
-        if not st.session_state.admin_logged_in:
-            with st.expander("🔒 Login Admin (Upload File)"):
-                input_user = st.text_input("Username", key="login_user")
-                input_pass = st.text_input("Password", type="password", key="login_pass")
-                if st.button("Login"):
-                    if input_user == "staf612120" and input_pass == "nfms2026%":
-                        st.session_state.admin_logged_in = True
-                        st.success("Login Berhasil!")
-                        st.rerun()
-                    else:
-                        st.error("Username atau Password Salah!")
-        else:
-            st.success("🔓 Mode Admin (Aktif)")
-            if st.button("Logout Admin"):
-                st.session_state.admin_logged_in = False
-                st.rerun()
+# ---------------------------------------------------------
+# MASTER FILTER & FILTER DETAIL (TEPAT DI BAWAH JUDUL UTAMA)
+# ---------------------------------------------------------
+st.divider()
 
-            st.subheader("📤 Upload File Excel Baru")
-            files_trx = st.file_uploader("1. Upload File Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-            files_siswa = st.file_uploader("2. Upload File Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-            files_diskon = st.file_uploader("3. Upload File Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+all_ta_set = set()
+if 'ta_clean' in df_trx_raw.columns:
+    all_ta_set.update(df_trx_raw['ta_clean'].dropna())
+if 'ta_clean' in df_siswa_raw.columns:
+    all_ta_set.update(df_siswa_raw['ta_clean'].dropna())
+list_master_ta = ["Semua Tahun Ajaran"] + sorted(list(all_ta_set))
 
-            if files_trx or files_siswa or files_diskon:
-                if files_trx:
-                    df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
-                if files_siswa:
-                    df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
-                if files_diskon:
-                    df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
+all_lb_set = set()
+if 'lb_clean' in df_trx_raw.columns:
+    all_lb_set.update(df_trx_raw['lb_clean'].dropna())
+if 'lb_clean' in df_siswa_raw.columns:
+    all_lb_set.update(df_siswa_raw['lb_clean'].dropna())
+if 'lb_clean' in df_diskon_raw.columns:
+    all_lb_set.update(df_diskon_raw['lb_clean'].dropna())
+list_master_lb = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
 
-        st.divider()
-        st.header("📍 Master Filter Dashboard")
+f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
 
-        # 1. Master Filter TA
-        all_ta_set = set()
-        if 'ta_clean' in df_trx_raw.columns:
-            all_ta_set.update(df_trx_raw['ta_clean'].dropna())
-        if 'ta_clean' in df_siswa_raw.columns:
-            all_ta_set.update(df_siswa_raw['ta_clean'].dropna())
+with f_col1:
+    selected_ta = st.selectbox("📅 Tahun Ajaran (TA):", list_master_ta)
 
-        list_master_ta = ["Semua Tahun Ajaran"] + sorted(list(all_ta_set))
-        selected_ta = st.selectbox("📅 Pilih Tahun Ajaran (TA):", list_master_ta)
+with f_col2:
+    selected_lb = st.selectbox("🏢 Lokasi Belajar:", list_master_lb)
 
-        # 2. Master Filter Lokasi Belajar
-        all_lb_set = set()
-        if 'lb_clean' in df_trx_raw.columns:
-            all_lb_set.update(df_trx_raw['lb_clean'].dropna())
-        if 'lb_clean' in df_siswa_raw.columns:
-            all_lb_set.update(df_siswa_raw['lb_clean'].dropna())
-        if 'lb_clean' in df_diskon_raw.columns:
-            all_lb_set.update(df_diskon_raw['lb_clean'].dropna())
+df_kec_source = df_siswa_raw.copy()
+if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_kec_source.columns:
+    df_kec_source = df_kec_source[df_kec_source['lb_clean'] == selected_lb]
 
-        list_master_lb = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
-        selected_lb = st.selectbox("🏢 Pilih Lokasi Belajar:", list_master_lb)
+list_kec = ["Semua Kecamatan"]
+if not df_kec_source.empty and 'Kec Tinggal' in df_kec_source.columns:
+    list_kec += sorted([str(x) for x in df_kec_source['Kec Tinggal'].dropna().unique()])
 
-        st.divider()
-        st.header("🔍 Filter Detail")
+with f_col3:
+    selected_kec = st.selectbox("📍 Kecamatan:", list_kec)
 
-        if not df_siswa_raw.empty and 'Kec Tinggal' in df_siswa_raw.columns:
-            st.subheader("Domisili Siswa")
-            df_kec_source = df_siswa_raw.copy()
-            if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_kec_source.columns:
-                df_kec_source = df_kec_source[df_kec_source['lb_clean'] == selected_lb]
-                
-            list_kec = ["Semua Kecamatan"] + sorted([str(x) for x in df_kec_source['Kec Tinggal'].dropna().unique()])
-            selected_kec = st.selectbox("Pilih Kecamatan:", list_kec)
+list_kel = ["Semua Kelurahan"]
+if selected_kec != "Semua Kecamatan" and not df_kec_source.empty:
+    sub_kel = df_kec_source[df_kec_source['Kec Tinggal'] == selected_kec]['Kel Tinggal'].dropna().unique()
+    list_kel += sorted([str(x) for x in sub_kel])
+elif not df_kec_source.empty and 'Kel Tinggal' in df_kec_source.columns:
+    list_kel += sorted([str(x) for x in df_kec_source['Kel Tinggal'].dropna().unique()])
 
-            if selected_kec != "Semua Kecamatan":
-                sub_kel = df_kec_source[df_kec_source['Kec Tinggal'] == selected_kec]['Kel Tinggal'].dropna().unique()
-                list_kel = ["Semua Kelurahan"] + sorted([str(x) for x in sub_kel])
-            else:
-                list_kel = ["Semua Kelurahan"] + sorted([str(x) for x in df_kec_source['Kel Tinggal'].dropna().unique()])
-            
-            selected_kel = st.selectbox("Pilih Kelurahan:", list_kel)
+with f_col4:
+    selected_kel = st.selectbox("🏠 Kelurahan:", list_kel)
 
-        if not df_diskon_raw.empty and 'Nama Diskon' in df_diskon_raw.columns:
-            st.subheader("Jenis Diskon")
-            list_nama_diskon = ["Semua Jenis Diskon"] + sorted([str(x) for x in df_diskon_raw['Nama Diskon'].dropna().unique()])
-            selected_nama_diskon = st.selectbox("Pilih Diskon:", list_nama_diskon)
+list_nama_diskon = ["Semua Jenis Diskon"]
+df_diskon_source = df_diskon_raw.copy()
+if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_diskon_source.columns:
+    df_diskon_source = df_diskon_source[df_diskon_source['lb_clean'] == selected_lb]
 
-# Filter Dataframe berdasarkan pilihan Pop-up
+if not df_diskon_source.empty and 'Nama Diskon' in df_diskon_source.columns:
+    list_nama_diskon += sorted([str(x) for x in df_diskon_source['Nama Diskon'].dropna().unique()])
+
+with f_col5:
+    selected_nama_diskon = st.selectbox("🏷️ Jenis Diskon:", list_nama_diskon)
+
+# ---------------------------------------------------------
+# APLIKASI FILTER KE DATAFRAME
+# ---------------------------------------------------------
 df_trx = df_trx_raw.copy()
 if not df_trx.empty:
     if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_trx.columns:
@@ -300,14 +290,15 @@ if not df_diskon.empty:
     if selected_nama_diskon != "Semua Jenis Diskon" and 'Nama Diskon' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['Nama Diskon'] == selected_nama_diskon]
 
-# Banner Indikator Filter Aktif
+# Banner Indikator Filter
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
 dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
 if selected_kel != "Semua Kelurahan":
     dom_info += f" ({selected_kel})"
+diskon_info = f" | {selected_nama_diskon}" if selected_nama_diskon != "Semua Jenis Diskon" else ""
 
-st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{dom_info}")
+st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{dom_info}{diskon_info}")
 
 # ---------------------------------------------------------
 # TABS LAYOUT
@@ -569,7 +560,7 @@ with tab5:
 # --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI TERFILTER ---
 with tab6:
     st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
-    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Kecamatan, dan Kelurahan yang aktif di panel sebelah kiri.")
+    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Kecamatan, dan Kelurahan yang aktif di atas.")
 
     if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
         df_status = df_siswa.copy()
