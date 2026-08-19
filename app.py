@@ -70,7 +70,7 @@ if not st.session_state.admin_logged_in:
         input_user = st.text_input("Username", key="login_user")
         input_pass = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login"):
-            if input_user == "staf" and input_pass == "nfms2026":
+            if input_user == "staf612120" and input_pass == "nfms2026%":
                 st.session_state.admin_logged_in = True
                 st.success("Login Berhasil!")
                 st.rerun()
