@@ -30,7 +30,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
-st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili (2425, 2526, 2627)")
+st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili")
 
 # Pemetaan Kode Lokasi Belajar -> Nama Lokasi
 LOCATION_MAP = {
@@ -122,7 +122,7 @@ def get_kategori_siswa(biaya):
     else:
         return f'Lainnya (Rp{int(biaya):,})'
 
-# Helper Function Auto-Load Files dari GitHub Repository jika tidak ada upload manual
+# Helper Function Auto-Load Files
 def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
         return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
@@ -142,13 +142,13 @@ def load_combined_data(uploaded_files, filename_keywords):
     return pd.DataFrame()
 
 # ---------------------------------------------------------
-# LOAD & COMBINE DATASETS AUTOMATICALLY
+# LOAD & COMBINE DATASETS
 # ---------------------------------------------------------
 df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
-# Standarisasi Kolom Lb, TA, Jenjang, dan Kategori Siswa
+# Standarisasi Kolom
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -172,7 +172,7 @@ if not df_diskon_raw.empty:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
 
 # ---------------------------------------------------------
-# MASTER FILTERS SIDEBAR (UNTUK SEMUA STAF)
+# MASTER FILTERS SIDEBAR
 # ---------------------------------------------------------
 st.sidebar.divider()
 st.sidebar.header("📍 Master Filter Dashboard")
@@ -223,6 +223,11 @@ if not df_diskon.empty:
 st.sidebar.divider()
 st.sidebar.header("🔍 Filter Detail")
 
+# Inisialisasi variabel filter agar tidak error jika dataframe kosong
+selected_kec = "Semua Kecamatan"
+selected_kel = "Semua Kelurahan"
+selected_nama_diskon = "Semua Jenis Diskon"
+
 if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
     st.sidebar.subheader("Domisili Siswa")
     list_kec = ["Semua Kecamatan"] + sorted([str(x) for x in df_siswa['Kec Tinggal'].dropna().unique()])
@@ -260,7 +265,7 @@ tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs([
     "🏫 Sekolah & Domisili",
     "🏷️ Siswa Diskon Khusus",
     "📈 Perbandingan 3 TA",
-    "📊 Status Bayar Domisili (Auto)"
+    "📊 Status Bayar Domisili"
 ])
 
 # --- TAB 1: LAPORAN TRANSAKSI ---
@@ -360,7 +365,6 @@ with tab3:
 
         st.divider()
 
-        # BAR CHART BARU: Jumlah Riil & Persentase per Jenjang Berdasarkan Domisili Kecamatan
         st.subheader("2. Jumlah Riil & Persentase per Jenjang Berdasarkan Kecamatan Domisili")
         if 'Kec Tinggal' in df_siswa.columns and 'Jenjang' in df_siswa.columns:
             jenjang_kec = df_siswa.groupby(['Kec Tinggal', 'Jenjang']).size().reset_index(name='Jumlah_Siswa')
@@ -383,7 +387,6 @@ with tab3:
 
         st.divider()
 
-        # BAR CHART BARU: Jumlah Riil & Persentase per Jenjang Berdasarkan Domisili Kelurahan
         st.subheader("3. Jumlah Riil & Persentase per Jenjang Berdasarkan Kelurahan Domisili")
         if 'Kel Tinggal' in df_siswa.columns and 'Jenjang' in df_siswa.columns:
             jenjang_kel = df_siswa.groupby(['Kel Tinggal', 'Jenjang']).size().reset_index(name='Jumlah_Siswa')
@@ -502,13 +505,14 @@ with tab5:
     else:
         st.warning("Data Siswa Multi-TA belum tersedia.")
 
-# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI (TER-SINKRONISASI FILTER LOKASI BELAJAR) ---
+# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI TERFILTER ---
 with tab6:
     st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
-    st.info("💡 **Tersinkronisasi Filter Lokasi Belajar:** Menampilkan persentase konsumen yang membayar Lunas vs Angsuran berdasarkan domisili (Kecamatan & Kelurahan). Pilihan Lokasi Belajar di Sidebar akan otomatis menyaring grafik dan tabel di bawah ini.")
+    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Kecamatan, dan Kelurahan yang aktif di panel sebelah kiri.")
 
-    if not df_siswa_raw.empty and 'Kec Tinggal' in df_siswa_raw.columns:
-        df_status = df_siswa_raw.copy()
+    # Menggunakan df_siswa yang sudah terfilter, bukan df_siswa_raw
+    if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
+        df_status = df_siswa.copy()
         
         df_status['Status_Bayar'] = df_status['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
         
@@ -517,42 +521,43 @@ with tab6:
         if 'lb_clean' not in df_status.columns:
             df_status['lb_clean'] = df_status['lb'].apply(format_lb)
 
-        # Apply Filter Lokasi Belajar dari Sidebar jika dipilih
-        if selected_lb != "Semua Cabang / Lokasi":
-            df_status = df_status[df_status['lb_clean'] == selected_lb]
-
         col_st1, col_st2, col_st3, col_st4 = st.columns(4)
         total_s = len(df_status)
         total_lunas = len(df_status[df_status['Status_Bayar'] == 'Lunas'])
         total_angsuran = len(df_status[df_status['Status_Bayar'] == 'Angsuran'])
         
-        col_st1.metric("Total Siswa Teranalisis", f"{total_s} Siswa")
+        col_st1.metric("Total Siswa Terfilter", f"{total_s} Siswa")
         col_st2.metric("Siswa Lunas", f"{total_lunas} Siswa ({round(total_lunas/total_s*100,1) if total_s>0 else 0}%)")
         col_st3.metric("Siswa Angsuran", f"{total_angsuran} Siswa ({round(total_angsuran/total_s*100,1) if total_s>0 else 0}%)")
-        col_st4.metric("Lokasi Belajar Aktif", selected_lb)
+        col_st4.metric("Jumlah Domisili", f"{df_status['Kel Tinggal'].nunique()} Kelurahan")
 
         st.divider()
 
-        st.subheader(f"1. Grafik Persentase Status Bayar per Kecamatan Domisili ({selected_lb})")
-        kec_summary = df_status.groupby(['lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().reset_index(name='Jumlah')
+        st.subheader("1. Grafik Presentase Status Bayar per Domisili")
         
-        fig_status_kec = px.bar(
-            kec_summary, 
-            x='Kec Tinggal', 
+        # Dinamis: Jika user memfilter 1 Kecamatan, grafik otomatis zoom in menampilkan breakdown Kelurahan
+        domisili_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" else 'Kec Tinggal'
+        domisili_label = 'Kelurahan' if selected_kec != "Semua Kecamatan" else 'Kecamatan'
+
+        dom_summary = df_status.groupby(['lb_clean', domisili_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
+        
+        fig_status_dom = px.bar(
+            dom_summary, 
+            x=domisili_col, 
             y='Jumlah', 
             color='Status_Bayar', 
             barmode='stack',
-            facet_col='lb_clean' if selected_lb == "Semua Cabang / Lokasi" else None,
+            facet_col='lb_clean',
             text_auto=True,
             color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'},
             template="plotly_dark",
-            labels={'Kec Tinggal': 'Kecamatan Domisili', 'lb_clean': 'Lokasi Belajar'}
+            labels={domisili_col: f'{domisili_label} Domisili', 'lb_clean': 'Lokasi Belajar'}
         )
-        st.plotly_chart(fig_status_kec, use_container_width=True)
+        st.plotly_chart(fig_status_dom, use_container_width=True)
 
         st.divider()
 
-        st.subheader("2. Tabel Rincian Persentase per Kecamatan Domisili (Per TA & Lokasi Belajar)")
+        st.subheader("2. Tabel Rincian Persentase per Kecamatan Domisili (Terfilter)")
         rekap_kec = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
         
         if 'Lunas' not in rekap_kec.columns:
@@ -567,7 +572,7 @@ with tab6:
         rekap_kec = rekap_kec.rename(columns={
             'ta_clean': 'Tahun Ajaran (TA)',
             'lb_clean': 'Lokasi Belajar',
-            'Kecamatan': 'Kecamatan Domisili',
+            'Kec Tinggal': 'Kecamatan Domisili',
             'Lunas': 'Jumlah Lunas',
             'Angsuran': 'Jumlah Angsuran'
         })
@@ -576,7 +581,7 @@ with tab6:
 
         st.divider()
 
-        st.subheader("3. Tabel Rincian Persentase per Kelurahan Domisili (Per TA & Lokasi Belajar)")
+        st.subheader("3. Tabel Rincian Persentase per Kelurahan Domisili (Terfilter)")
         rekap_kel = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Kel Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
         
         if 'Lunas' not in rekap_kel.columns:
@@ -600,4 +605,4 @@ with tab6:
         st.dataframe(rekap_kel, use_container_width=True)
 
     else:
-        st.warning("Data Siswa untuk analisis status bayar domisili belum tersedia.")
+        st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
