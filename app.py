@@ -70,7 +70,7 @@ if not st.session_state.admin_logged_in:
         input_user = st.text_input("Username", key="login_user")
         input_pass = st.text_input("Password", type="password", key="login_pass")
         if st.button("Login"):
-            if input_user == "staf612120" and input_pass == "nfms2026%":
+            if input_user == "staf" and input_pass == "nfms2026":
                 st.session_state.admin_logged_in = True
                 st.success("Login Berhasil!")
                 st.rerun()
@@ -502,10 +502,10 @@ with tab5:
     else:
         st.warning("Data Siswa Multi-TA belum tersedia.")
 
-# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI (OTOMATIS TANPA FILTER) ---
+# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI (TER-SINKRONISASI FILTER LOKASI BELAJAR) ---
 with tab6:
-    st.header("📊 Analisis Otomatis Persentase Lunas & Angsuran Berdasarkan Domisili")
-    st.info("💡 **Fitur Otomatis Multi-TA:** Menghitung secara langsung persentase konsumen per Lokasi Belajar yang membayar Lunas vs Angsuran berdasarkan domisili (Kecamatan & Kelurahan) selama 3 TA terakhir secara utuh.")
+    st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
+    st.info("💡 **Tersinkronisasi Filter Lokasi Belajar:** Menampilkan persentase konsumen yang membayar Lunas vs Angsuran berdasarkan domisili (Kecamatan & Kelurahan). Pilihan Lokasi Belajar di Sidebar akan otomatis menyaring grafik dan tabel di bawah ini.")
 
     if not df_siswa_raw.empty and 'Kec Tinggal' in df_siswa_raw.columns:
         df_status = df_siswa_raw.copy()
@@ -517,6 +517,10 @@ with tab6:
         if 'lb_clean' not in df_status.columns:
             df_status['lb_clean'] = df_status['lb'].apply(format_lb)
 
+        # Apply Filter Lokasi Belajar dari Sidebar jika dipilih
+        if selected_lb != "Semua Cabang / Lokasi":
+            df_status = df_status[df_status['lb_clean'] == selected_lb]
+
         col_st1, col_st2, col_st3, col_st4 = st.columns(4)
         total_s = len(df_status)
         total_lunas = len(df_status[df_status['Status_Bayar'] == 'Lunas'])
@@ -525,11 +529,11 @@ with tab6:
         col_st1.metric("Total Siswa Teranalisis", f"{total_s} Siswa")
         col_st2.metric("Siswa Lunas", f"{total_lunas} Siswa ({round(total_lunas/total_s*100,1) if total_s>0 else 0}%)")
         col_st3.metric("Siswa Angsuran", f"{total_angsuran} Siswa ({round(total_angsuran/total_s*100,1) if total_s>0 else 0}%)")
-        col_st4.metric("Jumlah Kecamatan Domisili", f"{df_status['Kec Tinggal'].nunique()} Kecamatan")
+        col_st4.metric("Lokasi Belajar Aktif", selected_lb)
 
         st.divider()
 
-        st.subheader("1. Grafik Persentase Status Bayar per Kecamatan Domisili & Lokasi Belajar")
+        st.subheader(f"1. Grafik Persentase Status Bayar per Kecamatan Domisili ({selected_lb})")
         kec_summary = df_status.groupby(['lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().reset_index(name='Jumlah')
         
         fig_status_kec = px.bar(
@@ -538,7 +542,7 @@ with tab6:
             y='Jumlah', 
             color='Status_Bayar', 
             barmode='stack',
-            facet_col='lb_clean',
+            facet_col='lb_clean' if selected_lb == "Semua Cabang / Lokasi" else None,
             text_auto=True,
             color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'},
             template="plotly_dark",
