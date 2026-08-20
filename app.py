@@ -80,20 +80,50 @@ def style_chart(fig):
     return fig
 
 # Helper Function Gemini AI API Call
+import urllib.request
+import urllib.error
+import json
+
 def ask_gemini_ai(api_key, prompt_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-    headers = {'Content-Type': 'application/json'}
+    if not api_key:
+        return "⚠️ **API Key tidak boleh kosong.**"
+        
+    # 1. Bersihkan spasi, enter, dan tanda petik dari API Key
+    clean_key = str(api_key).strip().strip("'").strip('"').strip()
+    
+    # 2. Endpoint Resmi Gemini 1.5 Flash
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    # 3. Header khusus untuk mendukung Kunci format baru 'AQ.' & format lama 'AIza'
+    headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': clean_key
+    }
+    
     payload = {
         "contents": [{
             "parts": [{"text": prompt_text}]
         }]
     }
     
-    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers)
     try:
+        data_json = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data_json, headers=headers)
+        
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             return res_data['candidates'][0]['content']['parts'][0]['text']
+            
+    except urllib.error.HTTPError as e:
+        # Membaca pesan detail langsung dari Google
+        try:
+            raw_err = e.read().decode('utf-8')
+            err_json = json.loads(raw_err)
+            detail_msg = err_json.get('error', {}).get('message', raw_err)
+            return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
+        except Exception:
+            return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
+            
     except Exception as e:
         return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
