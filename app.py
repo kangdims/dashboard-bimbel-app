@@ -16,7 +16,7 @@ st.set_page_config(
 )
 
 # Custom Styling Adaptive Theme (Support Light, Dark, & System Mode)
-st.markdown('''
+st.markdown("""
     <style>
     /* Styling Metric Cards Adaptive Theme & Auto-Fit Text */
     div[data-testid="stMetric"] {
@@ -50,7 +50,7 @@ st.markdown('''
         border-radius: 10px !important;
     }
     </style>
-''', unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ---------------------------------------------------------
 # MAPPING KODE CABANG & JENJANG
@@ -84,7 +84,7 @@ def style_chart(fig):
     return fig
 
 # ---------------------------------------------------------
-# HELPER GEMINI AI (DENGAN REVISI OTENTIKASI LENGKAP)
+# HELPER GEMINI AI (DUAL HYBRID ENGINE: SDK google-genai & REST)
 # ---------------------------------------------------------
 def ask_gemini_ai(api_key, prompt_text):
     if not api_key:
@@ -93,7 +93,21 @@ def ask_gemini_ai(api_key, prompt_text):
     # Bersihkan spasi, enter, dan tanda petik dari API Key
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
-    # Kirim via URL Parameter ?key= DAN Header x-goog-api-key untuk fleksibilitas otentikasi
+    # Opsi 1: Menggunakan SDK resmi google-genai jika terpasang
+    try:
+        from google import genai
+        client = genai.Client(api_key=clean_key)
+        response = client.models.generate_content(
+            model='gemini-1.5-flash',
+            contents=prompt_text,
+        )
+        return response.text
+    except ImportError:
+        pass # Jika modul belum diinstall via pip, lanjut otomatis ke REST API
+    except Exception as e:
+        return f"⚠️ **Error Gemini AI SDK:** {str(e)}"
+
+    # Opsi 2: Fallback Otomatis ke REST API Endpoint
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {
         'Content-Type': 'application/json',
@@ -782,7 +796,15 @@ with tab7:
                 st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
             else:
                 with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
-                    prompt_narrative = f"Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.\nBerdasarkan data operasional & keuangan terbaru berikut:\n{data_context}\n\nTuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresentasikan kepada direksi:\n1. Executive Summary & Evaluasi Kinerja\n2. Analisis Risiko & Piutang Tagihan\n3. Peluang Ekspansi & Marketing\n4. 3 Langkah Strategis Prioritas (Actionable Steps)"
+                    prompt_narrative = f"""Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.
+Berdasarkan data operasional & keuangan terbaru berikut:
+{data_context}
+
+Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresentasikan kepada direksi:
+1. Executive Summary & Evaluasi Kinerja
+2. Analisis Risiko & Piutang Tagihan
+3. Peluang Ekspansi & Marketing
+4. 3 Langkah Strategis Prioritas (Actionable Steps)"""
                     
                     ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
                     st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
@@ -799,9 +821,15 @@ with tab7:
                 st.warning("⚠️ API Key belum dimasukkan.")
             elif user_question:
                 with st.spinner("🤖 AI sedang memproses pertanyaan Anda..."):
-                    prompt_q = f"Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.\nKonteks data dashboard saat ini:\n{data_context}\n\nPertanyaan Pengguna: '{user_question}'\n\nJawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."
+                    prompt_q = f"""Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.
+Konteks data dashboard saat ini:
+{data_context}
+
+Pertanyaan Pengguna: '{user_question}'
+
+Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."""
                     answer = ask_gemini_ai(user_gemini_key, prompt_q)
-                    st.success(f"**Jawaban AI:**\n\n{answer}")
+                    st.success(f"""**Jawaban AI:**\n\n{answer}""")
 
     else:
         st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
