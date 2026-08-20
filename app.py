@@ -84,7 +84,7 @@ def style_chart(fig):
     return fig
 
 # ---------------------------------------------------------
-# HELPER GEMINI AI (MENDUKUNG FORMAT KUNCI AQ. & AIzaSy)
+# HELPER GEMINI AI (DENGAN REVISI OTENTIKASI LENGKAP)
 # ---------------------------------------------------------
 def ask_gemini_ai(api_key, prompt_text):
     if not api_key:
@@ -93,9 +93,8 @@ def ask_gemini_ai(api_key, prompt_text):
     # Bersihkan spasi, enter, dan tanda petik dari API Key
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
-    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
-    
-    # Pengiriman x-goog-api-key di Header untuk mendukung Kunci AQ.
+    # Kirim via URL Parameter ?key= DAN Header x-goog-api-key untuk fleksibilitas otentikasi
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {
         'Content-Type': 'application/json',
         'x-goog-api-key': clean_key
