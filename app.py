@@ -4,8 +4,11 @@ import plotly.express as px
 import glob
 import json
 import urllib.request
+import urllib.error
 
-# Konfigurasi Halaman Web
+# ---------------------------------------------------------
+# KONFIGURASI HALAMAN WEB & THEME
+# ---------------------------------------------------------
 st.set_page_config(
     page_title="Executive Dashboard Multi-TA - Bimbingan Belajar",
     page_icon="📊",
@@ -49,14 +52,15 @@ st.markdown('''
     </style>
 ''', unsafe_allow_html=True)
 
-# Pemetaan Kode Lokasi Belajar -> Nama Lokasi
+# ---------------------------------------------------------
+# MAPPING KODE CABANG & JENJANG
+# ---------------------------------------------------------
 LOCATION_MAP = {
     '168': 'NF Halim',
     '192': 'NF Condet',
     '219': 'NF Tebet'
 }
 
-# Pemetaan Kode Jenjang -> Nama Jenjang
 JENJANG_MAP = {
     'F': '4 SD',
     'G': '5 SD',
@@ -70,7 +74,7 @@ JENJANG_MAP = {
     'O': 'RONIN'
 }
 
-# Helper Function Plotly Transparent Adaptive
+# Helper Function Plotly Transparent
 def style_chart(fig):
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -79,21 +83,47 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Gemini AI API Call
+# ---------------------------------------------------------
+# HELPER GEMINI AI (MENDUKUNG FORMAT KUNCI AQ. & AIzaSy)
+# ---------------------------------------------------------
 def ask_gemini_ai(api_key, prompt_text):
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
-    headers = {'Content-Type': 'application/json'}
+    if not api_key:
+        return "⚠️ **API Key tidak boleh kosong.**"
+        
+    # Bersihkan spasi, enter, dan tanda petik dari API Key
+    clean_key = str(api_key).strip().strip("'").strip('"').strip()
+    
+    url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent"
+    
+    # Pengiriman x-goog-api-key di Header untuk mendukung Kunci AQ.
+    headers = {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': clean_key
+    }
+    
     payload = {
         "contents": [{
             "parts": [{"text": prompt_text}]
         }]
     }
     
-    req = urllib.request.Request(url, data=json.dumps(payload).encode('utf-8'), headers=headers)
     try:
+        data_json = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data_json, headers=headers)
+        
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             return res_data['candidates'][0]['content']['parts'][0]['text']
+            
+    except urllib.error.HTTPError as e:
+        try:
+            raw_err = e.read().decode('utf-8')
+            err_json = json.loads(raw_err)
+            detail_msg = err_json.get('error', {}).get('message', raw_err)
+            return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
+        except Exception:
+            return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
+            
     except Exception as e:
         return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
@@ -114,7 +144,7 @@ with col_head1:
     st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili")
 
 with col_head2:
-    st.write("") # Spacing Alignment
+    st.write("") 
     if not st.session_state.admin_logged_in:
         with st.popover("🔑 Login Admin / Upload", use_container_width=True):
             st.subheader("🔑 Akses Admin")
@@ -140,7 +170,7 @@ with col_head2:
             files_siswa = st.file_uploader("2. Data Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
             files_diskon = st.file_uploader("3. Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
-# Helper Function Standarisasi & Mapping
+# Helper Function Pembersihan Data
 def clean_str(val):
     if pd.isna(val):
         return None
@@ -222,7 +252,7 @@ if not df_diskon_raw.empty:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
 
 # ---------------------------------------------------------
-# MASTER FILTER & FILTER DETAIL (TEPAT DI BAWAH JUDUL UTAMA)
+# MASTER FILTER (TEPAT DI BAWAH JUDUL UTAMA)
 # ---------------------------------------------------------
 st.divider()
 
@@ -310,7 +340,7 @@ if not df_diskon.empty:
     if selected_nama_diskon != "Semua Jenis Diskon" and 'Nama Diskon' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['Nama Diskon'] == selected_nama_diskon]
 
-# Banner Indikator Filter
+# Banner Indikator Filter Aktif
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
 dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
@@ -321,7 +351,7 @@ diskon_info = f" | {selected_nama_diskon}" if selected_nama_diskon != "Semua Jen
 st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{dom_info}{diskon_info}")
 
 # ---------------------------------------------------------
-# TABS LAYOUT
+# TABS LAYOUT DASHBOARD
 # ---------------------------------------------------------
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "💰 Keuangan Transaksi", 
@@ -680,7 +710,7 @@ with tab6:
 # --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY ---
 with tab7:
     st.header("🤖 Executive AI Analytics & Smart Insights Assistant")
-    st.info("💡 **AI Engine Integration:** Modul ini secara cerdas menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
+    st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
 
     if not df_siswa.empty:
         # 1. OTOMATISASI HIGHLIGHT DATA (SMART STATISTICAL AI INSIGHTS)
@@ -713,22 +743,23 @@ with tab7:
             kec_text = ", ".join([f"**{k}** ({v} siswa)" for k, v in top_kec.items()])
             smart_bullets.append(f"**Basis Domisili Utama:** Konsentrasi pendaftar tertinggi berasal dari Kecamatan {kec_text}.")
 
-        if 'Kategori_Siswa' in df_siswa.columns:
-            kat_counts = df_siswa['Kategori_Siswa'].value_counts()
-            kat_text = ", ".join([f"{k}: **{v}**" for k, v in kat_counts.items()])
-            smart_bullets.append(f"**Komposisi Status Pendaftar:** Rincian biaya formulir ({kat_text}).")
-
         for b in smart_bullets:
             st.markdown(f"- {b}")
 
         st.divider()
 
-        # 2. INTEGRASI GEMINI AI API UNTUK REKOMENDASI STRATEGIS & LAPORAN NARATIF
+        # 2. INTEGRASI GEMINI AI API (OTOMATIS CEK SECRETS SERVER ATAU INPUT USER)
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
-        with st.expander("🔑 Pengaturan API Key Google Gemini (Gratis)", expanded=False):
-            st.write("Dapatkan API Key gratis di [Google AI Studio (aistudio.google.com)](https://aistudio.google.com/).")
-            user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
+        system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+        
+        if system_gemini_key:
+            user_gemini_key = system_gemini_key
+            st.success("✅ **AI Key Terhubung dari Server System.**")
+        else:
+            with st.expander("🔑 Pengaturan API Key Google Gemini", expanded=True):
+                st.write("Tempelkan API Key asli Anda dari [Google AI Studio (aistudio.google.com)](https://aistudio.google.com/app/apikey).")
+                user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
         ctx_lines = [
             f"Filter Terpilih: {ta_info}, {lb_info}, {dom_info}",
@@ -749,7 +780,7 @@ with tab7:
 
         if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
             if not user_gemini_key:
-                st.warning("⚠️ Silakan masukkan Gemini API Key Anda pada kotak ekspansi di atas untuk menjalankan Analisis AI Generatif.")
+                st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
             else:
                 with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
                     prompt_narrative = f"Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.\nBerdasarkan data operasional & keuangan terbaru berikut:\n{data_context}\n\nTuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresentasikan kepada direksi:\n1. Executive Summary & Evaluasi Kinerja\n2. Analisis Risiko & Piutang Tagihan\n3. Peluang Ekspansi & Marketing\n4. 3 Langkah Strategis Prioritas (Actionable Steps)"
@@ -766,7 +797,7 @@ with tab7:
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
         if st.button("Tanyakan ke AI", use_container_width=True):
             if not user_gemini_key:
-                st.warning("⚠️ Silakan masukkan Gemini API Key pada kolom di atas untuk menggunakan fitur Tanya AI.")
+                st.warning("⚠️ API Key belum dimasukkan.")
             elif user_question:
                 with st.spinner("🤖 AI sedang memproses pertanyaan Anda..."):
                     prompt_q = f"Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.\nKonteks data dashboard saat ini:\n{data_context}\n\nPertanyaan Pengguna: '{user_question}'\n\nJawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."
