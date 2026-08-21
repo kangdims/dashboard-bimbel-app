@@ -1,396 +1,222 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { 
-  DollarSign, UserPlus, MapPin, Tag, BarChart3, Wallet, RefreshCw, School
-} from 'lucide-react';
+import streamlit as st
+import pandas as pd
 
-// ==========================================
-// TYPES & MOCK DATA
-// ==========================================
+# ---------------------------------------------------------
+# KONFIGURASI HALAMAN
+# ---------------------------------------------------------
+st.set_page_config(
+    page_title="Executive Dashboard Sekolah",
+    page_icon="🏫",
+    layout="wide"
+)
 
-export interface FilterState {
-  ta: string;
-  lokasi: string;
-  kecamatan: string;
-  kelurahan: string;
-  diskon: string;
+# ---------------------------------------------------------
+# DATA MASTER FILTER
+# ---------------------------------------------------------
+TA_OPTIONS = ['2025/2026', '2024/2025', '2023/2024', '2022/2023']
+LOKASI_OPTIONS = ['Semua Lokasi', 'Kampus Utama', 'Kampus Barat', 'Kampus Timur']
+DISKON_OPTIONS = ['Semua Diskon', 'Prestasi Akademik', 'Yatim/Piatu', 'Saudara Kandung', 'Tahfizh']
+
+DOMISILI_DATA = {
+    'Semua Kecamatan': ['Semua Kelurahan'],
+    'Kebayoran Baru': ['Semua Kelurahan', 'Gandaria Utara', 'Cipete Utara', 'Pulo', 'Kramat Pela'],
+    'Cilandak': ['Semua Kelurahan', 'Cilandak Barat', 'Lebak Bulus', 'Pondok Labu'],
+    'Tebet': ['Semua Kelurahan', 'Tebet Barat', 'Tebet Timur', 'Menteng Dalam'],
 }
 
-const TA_OPTIONS = ['2025/2026', '2024/2025', '2023/2024', '2022/2023'];
-const LOKASI_OPTIONS = ['Semua Lokasi', 'Kampus Utama', 'Kampus Barat', 'Kampus Timur'];
-const DISKON_OPTIONS = ['Semua Diskon', 'Prestasi Akademik', 'Yatim/Piatu', 'Saudara Kandung', 'Tahfizh'];
+# ---------------------------------------------------------
+# READ & SYNC URL QUERY PARAMETERS
+# ---------------------------------------------------------
+query_params = st.query_params
 
-const DOMISILI_DATA: Record<string, string[]> = {
-  'Semua Kecamatan': ['Semua Kelurahan'],
-  'Kebayoran Baru': ['Semua Kelurahan', 'Gandaria Utara', 'Cipete Utara', 'Pulo', 'Kramat Pela'],
-  'Cilandak': ['Semua Kelurahan', 'Cilandak Barat', 'Lebak Bulus', 'Pondok Labu'],
-  'Tebet': ['Semua Kelurahan', 'Tebet Barat', 'Tebet Timur', 'Menteng Dalam'],
-};
+default_ta = query_params.get("ta", "2025/2026")
+default_lokasi = query_params.get("lokasi", "Semua Lokasi")
+default_kec = query_params.get("kecamatan", "Semua Kecamatan")
+default_kel = query_params.get("kelurahan", "Semua Kelurahan")
+default_diskon = query_params.get("diskon", "Semua Diskon")
 
-// ==========================================
-// MAIN COMPONENT
-// ==========================================
+# ---------------------------------------------------------
+# SIDEBAR NAVIGATION (6 MENU)
+# ---------------------------------------------------------
+st.sidebar.title("🏫 Navigasi Dashboard")
+menu = st.sidebar.radio(
+    "Pilih Menu:",
+    [
+        "Keuangan Transaksi",
+        "Pendaftaran Siswa",
+        "Sekolah & Domisili",
+        "Siswa Diskon Khusus",
+        "Perbandingan 3 TA",
+        "Status Bayar Domisili"
+    ]
+)
 
-export default function DashboardApp() {
-  const [activeTab, setActiveTab] = useState<string>('keuangan');
+if st.sidebar.button("🔄 Reset Filter Global"):
+    st.query_params.clear()
+    st.rerun()
 
-  // State Filter Global
-  const [filters, setFilters] = useState<FilterState>(() => {
-    const params = new URLSearchParams(window.location.search);
-    return {
-      ta: params.get('ta') || '2025/2026',
-      lokasi: params.get('lokasi') || 'Semua Lokasi',
-      kecamatan: params.get('kecamatan') || 'Semua Kecamatan',
-      kelurahan: params.get('kelurahan') || 'Semua Kelurahan',
-      diskon: params.get('diskon') || 'Semua Diskon',
-    };
-  });
+# ---------------------------------------------------------
+# PANEL FILTER GLOBAL
+# ---------------------------------------------------------
+st.title("Sistem Informasi Executive Dashboard")
+st.markdown("---")
 
-  // Sinkronisasi Filter ke URL Query String
-  useEffect(() => {
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value) params.set(key, value);
-    });
-    const newUrl = `${window.location.pathname}?${params.toString()}`;
-    window.history.replaceState({}, '', newUrl);
-  }, [filters]);
+st.subheader("⚙️ Filter Global Dashboard")
+col1, col2, col3, col4, col5 = st.columns(5)
 
-  // Handler Perubahan Filter
-  const handleFilterChange = (key: keyof FilterState, value: string) => {
-    setFilters((prev) => {
-      const next = { ...prev, [key]: value };
-      if (key === 'kecamatan') {
-        next.kelurahan = 'Semua Kelurahan';
-      }
-      return next;
-    });
-  };
+with col1:
+    ta_idx = TA_OPTIONS.index(default_ta) if default_ta in TA_OPTIONS else 0
+    selected_ta = st.selectbox("Tahun Ajaran", TA_OPTIONS, index=ta_idx)
 
-  const handleResetFilter = () => {
-    setFilters({
-      ta: '2025/2026',
-      lokasi: 'Semua Lokasi',
-      kecamatan: 'Semua Kecamatan',
-      kelurahan: 'Semua Kelurahan',
-      diskon: 'Semua Diskon',
-    });
-  };
+with col2:
+    lokasi_idx = LOKASI_OPTIONS.index(default_lokasi) if default_lokasi in LOKASI_OPTIONS else 0
+    selected_lokasi = st.selectbox("Lokasi Belajar", LOKASI_OPTIONS, index=lokasi_idx)
 
-  return (
-    <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col font-sans">
-      {/* HEADER & GLOBAL FILTER BAR */}
-      <header className="bg-white border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="p-4 max-w-7xl mx-auto space-y-3">
-          <div className="flex justify-between items-center">
-            <h1 className="text-xl font-bold text-slate-900 flex items-center gap-2">
-              <School className="w-6 h-6 text-indigo-600" />
-              Sistem Informasi Executive Dashboard
-            </h1>
-            <button
-              onClick={handleResetFilter}
-              className="flex items-center gap-1.5 text-xs font-semibold text-slate-600 hover:text-indigo-600 bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-md transition"
-            >
-              <RefreshCw className="w-3.5 h-3.5" />
-              Reset Filter
-            </button>
-          </div>
+with col3:
+    kec_keys = list(DOMISILI_DATA.keys())
+    kec_idx = kec_keys.index(default_kec) if default_kec in kec_keys else 0
+    selected_kec = st.selectbox("Kecamatan", kec_keys, index=kec_idx)
 
-          {/* Panel Filter Global */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3 bg-slate-100/70 p-3 rounded-lg border border-slate-200">
-            {/* Filter 1: Tahun Ajaran */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Tahun Ajaran</label>
-              <select
-                value={filters.ta}
-                onChange={(e) => handleFilterChange('ta', e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {TA_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
+with col4:
+    # Cascading Dropdown: Opsi Kelurahan menyesuaikan Kecamatan
+    kel_options = DOMISILI_DATA.get(selected_kec, ['Semua Kelurahan'])
+    kel_idx = kel_options.index(default_kel) if default_kel in kel_options else 0
+    selected_kel = st.selectbox("Kelurahan", kel_options, index=kel_idx)
 
-            {/* Filter 2: Lokasi Belajar */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Lokasi Belajar</label>
-              <select
-                value={filters.lokasi}
-                onChange={(e) => handleFilterChange('lokasi', e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {LOKASI_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
+with col5:
+    diskon_idx = DISKON_OPTIONS.index(default_diskon) if default_diskon in DISKON_OPTIONS else 0
+    selected_diskon = st.selectbox("Jenis Diskon", DISKON_OPTIONS, index=diskon_idx)
 
-            {/* Filter 3: Kecamatan */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Kecamatan</label>
-              <select
-                value={filters.kecamatan}
-                onChange={(e) => handleFilterChange('kecamatan', e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {Object.keys(DOMISILI_DATA).map((kec) => (
-                  <option key={kec} value={kec}>{kec}</option>
-                ))}
-              </select>
-            </div>
+# Simpan State Filter ke URL Query Parameter
+st.query_params["ta"] = selected_ta
+st.query_params["lokasi"] = selected_lokasi
+st.query_params["kecamatan"] = selected_kec
+st.query_params["kelurahan"] = selected_kel
+st.query_params["diskon"] = selected_diskon
 
-            {/* Filter 4: Kelurahan (Cascading) */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Kelurahan</label>
-              <select
-                value={filters.kelurahan}
-                onChange={(e) => handleFilterChange('kelurahan', e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {(DOMISILI_DATA[filters.kecamatan] || ['Semua Kelurahan']).map((kel) => (
-                  <option key={kel} value={kel}>{kel}</option>
-                ))}
-              </select>
-            </div>
+st.markdown("---")
 
-            {/* Filter 5: Jenis Diskon */}
-            <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1">Jenis Diskon</label>
-              <select
-                value={filters.diskon}
-                onChange={(e) => handleFilterChange('diskon', e.target.value)}
-                className="w-full bg-white border border-slate-300 rounded-md px-2.5 py-1.5 text-xs focus:ring-2 focus:ring-indigo-500 outline-none"
-              >
-                {DISKON_OPTIONS.map((opt) => (
-                  <option key={opt} value={opt}>{opt}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-        </div>
-      </header>
+# Banner Status Filter Aktif
+st.info(
+    f"📌 **Filter Aktif:** TA: `{selected_ta}` | Lokasi: `{selected_lokasi}` | "
+    f"Kecamatan: `{selected_kec}` | Kelurahan: `{selected_kel}` | Diskon: `{selected_diskon}`"
+)
 
-      {/* BODY / MAIN CONTENT */}
-      <div className="flex-1 max-w-7xl w-full mx-auto flex flex-col md:flex-row gap-6 p-4">
-        {/* SIDEBAR NAVIGATION */}
-        <aside className="w-full md:w-64 shrink-0">
-          <nav className="bg-white rounded-lg border border-slate-200 p-2 space-y-1">
-            {[
-              { id: 'keuangan', label: 'Keuangan Transaksi', icon: DollarSign },
-              { id: 'pendaftaran', label: 'Pendaftaran Siswa', icon: UserPlus },
-              { id: 'sekolah_domisili', label: 'Sekolah & Domisili', icon: MapPin },
-              { id: 'siswa_diskon', label: 'Siswa Diskon Khusus', icon: Tag },
-              { id: 'perbandingan_3ta', label: 'Perbandingan 3 TA', icon: BarChart3 },
-              { id: 'status_bayar_domisili', label: 'Status Bayar Domisili', icon: Wallet },
-            ].map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => setActiveTab(tab.id)}
-                  className={`w-full flex items-center gap-2.5 px-3 py-2.5 rounded-md text-xs font-medium transition ${
-                    isActive
-                      ? 'bg-indigo-50 text-indigo-700 font-semibold'
-                      : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
-                  }`}
-                >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-indigo-600' : 'text-slate-400'}`} />
-                  {tab.label}
-                </button>
-              );
-            })}
-          </nav>
-        </aside>
+# ---------------------------------------------------------
+# RENDER SETIAP MENU
+# ---------------------------------------------------------
 
-        {/* VIEW CONTAINER */}
-        <main className="flex-1 bg-white rounded-lg border border-slate-200 p-6 shadow-sm">
-          <ActiveViewRender activeTab={activeTab} filters={filters} />
-        </main>
-      </div>
-    </div>
-  );
-}
+# 1. MENU KEUANGAN TRANSAKSI
+if menu == "Keuangan Transaksi":
+    st.header("💵 Keuangan & Transaksi")
+    st.caption("Ringkasan arus kas, pelunasan, dan tunggakan biaya siswa.")
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Total Penerimaan", "Rp 1.450.000.000", "+8.2%")
+    m2.metric("Sisa Piutang / Tunggakan", "Rp 185.000.000", "-3.1%")
+    m3.metric("Capaian Pelunasan", "88.7%", "+2.4%")
 
-// ==========================================
-// MENU ROUTER & VIEWS IMPLEMENTATION
-// ==========================================
+    st.subheader("Rincian Transaksi Sesuai Filter")
+    df_keuangan = pd.DataFrame({
+        "ID Transaksi": ["TRX-001", "TRX-002", "TRX-003", "TRX-004"],
+        "Nama Siswa": ["Ahmad Fauzi", "Siti Nurhaliza", "Budi Santoso", "Dewi Lestari"],
+        "Lokasi": [selected_lokasi]*4,
+        "Kecamatan": [selected_kec]*4,
+        "Jenis Diskon": [selected_diskon]*4,
+        "Nominal": ["Rp 2.500.000", "Rp 3.000.000", "Rp 1.800.000", "Rp 2.500.000"],
+        "Status": ["Lunas", "Lunas", "Cicilan", "Lunas"]
+    })
+    st.dataframe(df_keuangan, use_container_width=True)
 
-function ActiveViewRender({ activeTab, filters }: { activeTab: string; filters: FilterState }) {
-  switch (activeTab) {
-    case 'keuangan':
-      return <KeuanganTransaksiView filters={filters} />;
-    case 'pendaftaran':
-      return <PendaftaranSiswaView filters={filters} />;
-    case 'sekolah_domisili':
-      return <SekolahDomisiliView filters={filters} />;
-    case 'siswa_diskon':
-      return <SiswaDiskonKhususView filters={filters} />;
-    case 'perbandingan_3ta':
-      return <Perbandingan3TAView filters={filters} />;
-    case 'status_bayar_domisili':
-      return <StatusBayarDomisiliView filters={filters} />;
-    default:
-      return null;
-  }
-}
+# 2. MENU PENDAFTARAN SISWA
+elif menu == "Pendaftaran Siswa":
+    st.header("📝 Pendaftaran Siswa Baru")
+    st.caption("Statistik pendaftar, status lulus seleksi, dan registrasi ulang.")
+    
+    col_a, col_b = st.columns(2)
+    col_a.metric(f"Total Pendaftar ({selected_ta})", "420 Siswa")
+    col_b.metric("Siswa Terverifikasi", "385 Siswa")
 
-// Helper Card Filter Status Bar
-function FilterBadgeSummary({ filters }: { filters: FilterState }) {
-  return (
-    <div className="mb-4 p-3 bg-indigo-50/50 rounded-md border border-indigo-100 flex flex-wrap gap-2 text-xs text-indigo-900">
-      <span className="font-semibold">Filter Aktif:</span>
-      <span className="bg-white px-2 py-0.5 rounded border border-indigo-200">TA: {filters.ta}</span>
-      <span className="bg-white px-2 py-0.5 rounded border border-indigo-200">Lokasi: {filters.lokasi}</span>
-      <span className="bg-white px-2 py-0.5 rounded border border-indigo-200">Kec: {filters.kecamatan}</span>
-      <span className="bg-white px-2 py-0.5 rounded border border-indigo-200">Kel: {filters.kelurahan}</span>
-      <span className="bg-white px-2 py-0.5 rounded border border-indigo-200">Diskon: {filters.diskon}</span>
-    </div>
-  );
-}
+    chart_data = pd.DataFrame({
+        "Bulan": ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun"],
+        "Pendaftar": [45, 60, 85, 110, 70, 50]
+    })
+    st.bar_chart(chart_data.set_index("Bulan"))
 
-// 1. Menu Keuangan Transaksi
-function KeuanganTransaksiView({ filters }: { filters: FilterState }) {
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Keuangan & Transaksi</h2>
-      <p className="text-xs text-slate-500 mb-4">Ringkasan arus kas, pelunasan, dan tunggakan biaya siswa.</p>
-      <FilterBadgeSummary filters={filters} />
-      
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-4">
-        <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-lg">
-          <p className="text-xs text-emerald-600 font-medium">Total Penerimaan</p>
-          <p className="text-xl font-bold text-emerald-900 mt-1">Rp 1.450.000.000</p>
-        </div>
-        <div className="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-          <p className="text-xs text-amber-600 font-medium">Sisa Piutang/Tunggakan</p>
-          <p className="text-xl font-bold text-amber-900 mt-1">Rp 185.000.000</p>
-        </div>
-        <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg">
-          <p className="text-xs text-blue-600 font-medium">Capaian Pelunasan</p>
-          <p className="text-xl font-bold text-blue-900 mt-1">88.7%</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+# 3. MENU SEKOLAH & DOMISILI
+elif menu == "Sekolah & Domisili":
+    st.header("🗺️ Sekolah Asal & Sebaran Domisili")
+    st.caption("Pemetaan wilayah tinggal siswa dan asal sekolah pendaftar.")
+    
+    st.write(
+        f"Demografi siswa dari **{selected_kec}** ({selected_kel}) "
+        f"pada unit **{selected_lokasi}** dengan kriteria diskon **{selected_diskon}**."
+    )
+    
+    df_domisili = pd.DataFrame({
+        "Sekolah Asal": ["SMPN 1", "SMPN 5", "MTs Negeri 1", "SMP Swasta Merdeka"],
+        "Kecamatan": [selected_kec]*4,
+        "Kelurahan": [selected_kel]*4,
+        "Jumlah Siswa": [42, 28, 19, 15]
+    })
+    st.table(df_domisili)
 
-// 2. Menu Pendaftaran Siswa
-function PendaftaranSiswaView({ filters }: { filters: FilterState }) {
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Pendaftaran Siswa Baru</h2>
-      <p className="text-xs text-slate-500 mb-4">Statistik pendaftar, status lulus seleksi, dan registrasi ulang.</p>
-      <FilterBadgeSummary filters={filters} />
+# 4. MENU SISWA DISKON KHUSUS
+elif menu == "Siswa Diskon Khusus":
+    st.header("🏷️ Penerima Diskon & Beasiswa")
+    st.caption("Rincian penerima beasiswa berdasarkan skema khusus.")
+    
+    df_diskon = pd.DataFrame({
+        "Kategori Diskon": [selected_diskon],
+        "Lokasi Belajar": [selected_lokasi],
+        "Kecamatan": [selected_kec],
+        "Kelurahan": [selected_kel],
+        "Jumlah Penerima": ["64 Siswa"],
+        "Total Potongan": ["Rp 128.000.000"]
+    })
+    st.dataframe(df_diskon, use_container_width=True)
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div className="p-4 border rounded-lg">
-          <p className="text-xs font-semibold text-slate-500">Total Pendaftar ({filters.ta})</p>
-          <p className="text-2xl font-bold text-indigo-600">420 Siswa</p>
-        </div>
-        <div className="p-4 border rounded-lg">
-          <p className="text-xs font-semibold text-slate-500">Siswa Terverifikasi</p>
-          <p className="text-2xl font-bold text-emerald-600">385 Siswa</p>
-        </div>
-      </div>
-    </div>
-  );
-}
+# 5. MENU PERBANDINGAN 3 TA
+elif menu == "Perbandingan 3 TA":
+    st.header("📊 Perbandingan Multi-Tahun Ajaran")
+    
+    try:
+        base_year = int(selected_ta.split('/')[0])
+    except ValueError:
+        base_year = 2025
+        
+    ta_current = f"{base_year}/{base_year + 1}"
+    ta_prev1 = f"{base_year - 1}/{base_year}"
+    ta_prev2 = f"{base_year - 2}/{base_year - 1}"
+    
+    st.caption(f"Analisis tren 3 tahun berturut-turut dengan patokan Anchor Year {ta_current}.")
+    
+    c1, c2, c3 = st.columns(3)
+    c1.metric(f"TA {ta_current} (Aktif)", "420 Siswa", "+8.5%")
+    c2.metric(f"TA {ta_prev1}", "387 Siswa", "+4.2%")
+    c3.metric(f"TA {ta_prev2}", "371 Siswa", "0.0%")
+    
+    df_compare = pd.DataFrame({
+        "Metrik Aggregat": ["Total Pendaftar", "Siswa Lunas", "Penerima Diskon"],
+        ta_prev2: [371, 310, 45],
+        ta_prev1: [387, 340, 52],
+        ta_current: [420, 385, 64]
+    })
+    st.dataframe(df_compare, use_container_width=True)
 
-// 3. Menu Sekolah & Domisili
-function SekolahDomisiliView({ filters }: { filters: FilterState }) {
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Sekolah Asal & Sebaran Domisili</h2>
-      <p className="text-xs text-slate-500 mb-4">Pemetaan wilayah tinggal siswa dan asal sekolah pendaftar.</p>
-      <FilterBadgeSummary filters={filters} />
-
-      <div className="p-4 border border-dashed rounded-lg text-center bg-slate-50">
-        <p className="text-xs text-slate-600">
-          Menampilkan sebaran geografis untuk <b>{filters.kecamatan}</b> - <b>{filters.kelurahan}</b> pada unit <b>{filters.lokasi}</b>.
-        </p>
-      </div>
-    </div>
-  );
-}
-
-// 4. Menu Siswa Diskon Khusus
-function SiswaDiskonKhususView({ filters }: { filters: FilterState }) {
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Penerima Diskon & Beasiswa</h2>
-      <p className="text-xs text-slate-500 mb-4">Rincian penerima beasiswa berdasarkan skema khusus.</p>
-      <FilterBadgeSummary filters={filters} />
-
-      <table className="w-full text-xs text-left border-collapse border border-slate-200 mt-2">
-        <thead className="bg-slate-100">
-          <tr>
-            <th className="p-2 border">Kategori Diskon</th>
-            <th className="p-2 border">Lokasi</th>
-            <th className="p-2 border">Wilayah</th>
-            <th className="p-2 border">Jumlah Penerima</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <td className="p-2 border font-medium">{filters.diskon}</td>
-            <td className="p-2 border">{filters.lokasi}</td>
-            <td className="p-2 border">{filters.kecamatan}</td>
-            <td className="p-2 border font-bold">64 Siswa</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// 5. Menu Perbandingan 3 TA
-function Perbandingan3TAView({ filters }: { filters: FilterState }) {
-  const years = useMemo(() => {
-    const baseYear = parseInt(filters.ta.split('/')[0]) || 2025;
-    return [
-      `${baseYear}/${baseYear + 1}`,
-      `${baseYear - 1}/${baseYear}`,
-      `${baseYear - 2}/${baseYear - 1}`,
-    ];
-  }, [filters.ta]);
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Perbandingan Multi-Tahun Ajaran</h2>
-      <p className="text-xs text-slate-500 mb-4">Analisis tren 3 tahun berturut-turut berpatokan pada {filters.ta}.</p>
-      <FilterBadgeSummary filters={filters} />
-
-      <div className="grid grid-cols-3 gap-4 text-center">
-        {years.map((y, idx) => (
-          <div key={y} className={`p-4 rounded-lg border ${idx === 0 ? 'bg-indigo-50 border-indigo-300' : 'bg-slate-50 border-slate-200'}`}>
-            <p className="text-xs font-semibold text-slate-500">{idx === 0 ? 'Anchor Year (TA Active)' : `TA ${y}`}</p>
-            <p className="text-base font-bold text-slate-800 mt-1">{y}</p>
-            <p className="text-xs text-slate-600 mt-2">Pendaftar: {350 - idx * 25} Siswa</p>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// 6. Menu Status Bayar Domisili
-function StatusBayarDomisiliView({ filters }: { filters: FilterState }) {
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1">Status Pembayaran per Domisili</h2>
-      <p className="text-xs text-slate-500 mb-4">Matriks pelunasan SPP/Pangkal berbasis wilayah domisili.</p>
-      <FilterBadgeSummary filters={filters} />
-
-      <div className="p-4 border rounded-lg space-y-2">
-        <div className="flex justify-between text-xs font-medium">
-          <span>Kecamatan {filters.kecamatan}</span>
-          <span className="text-emerald-600 font-bold">91.2% Lunas</span>
-        </div>
-        <div className="w-full bg-slate-200 rounded-full h-2">
-          <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '91.2%' }}></div>
-        </div>
-      </div>
-    </div>
-  );
-}
+# 6. MENU STATUS BAYAR DOMISILI
+elif menu == "Status Bayar Domisili":
+    st.header("💳 Status Pembayaran per Domisili")
+    st.caption("Matriks pelunasan SPP/Pangkal berbasis wilayah domisili.")
+    
+    st.subheader(f"Tingkat Pelunasan Wilayah: {selected_kec} ({selected_kel})")
+    st.progress(0.912)
+    st.write("Persentase Pelunasan: **91.2%** (Lunas: 351 siswa, Menunggak: 34 siswa)")
+    
+    df_bayar_domisili = pd.DataFrame({
+        "Kelurahan": [selected_kel],
+        "Siswa Lunas": [351],
+        "Siswa Menunggak": [34],
+        "Total Nominal Tunggakan": ["Rp 42.500.000"]
+    })
+    st.table(df_bayar_domisili)
