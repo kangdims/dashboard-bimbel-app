@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
-  DollarSign, UserPlus, MapPin, Tag, BarChart3, Wallet, Bot, RefreshCw, Filter, School
+  DollarSign, UserPlus, MapPin, Tag, BarChart3, Wallet, RefreshCw, School
 } from 'lucide-react';
 
 // ==========================================
@@ -35,7 +35,6 @@ export default function DashboardApp() {
 
   // State Filter Global
   const [filters, setFilters] = useState<FilterState>(() => {
-    // Inisialisasi awal dari URL Query Params jika ada
     const params = new URLSearchParams(window.location.search);
     return {
       ta: params.get('ta') || '2025/2026',
@@ -60,7 +59,6 @@ export default function DashboardApp() {
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters((prev) => {
       const next = { ...prev, [key]: value };
-      // Cascading Logic: Jika Kecamatan berubah, reset Kelurahan ke "Semua Kelurahan"
       if (key === 'kecamatan') {
         next.kelurahan = 'Semua Kelurahan';
       }
@@ -184,7 +182,6 @@ export default function DashboardApp() {
               { id: 'siswa_diskon', label: 'Siswa Diskon Khusus', icon: Tag },
               { id: 'perbandingan_3ta', label: 'Perbandingan 3 TA', icon: BarChart3 },
               { id: 'status_bayar_domisili', label: 'Status Bayar Domisili', icon: Wallet },
-              { id: 'analisis_ai', label: 'Analisis AI', icon: Bot },
             ].map((tab) => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -233,8 +230,6 @@ function ActiveViewRender({ activeTab, filters }: { activeTab: string; filters: 
       return <Perbandingan3TAView filters={filters} />;
     case 'status_bayar_domisili':
       return <StatusBayarDomisiliView filters={filters} />;
-    case 'analisis_ai':
-      return <AnalisisAIView filters={filters} />;
     default:
       return null;
   }
@@ -351,7 +346,6 @@ function SiswaDiskonKhususView({ filters }: { filters: FilterState }) {
 
 // 5. Menu Perbandingan 3 TA
 function Perbandingan3TAView({ filters }: { filters: FilterState }) {
-  // Hitung 3 TA secara matematis berdasarkan TA pilihan (Anchor Year)
   const years = useMemo(() => {
     const baseYear = parseInt(filters.ta.split('/')[0]) || 2025;
     return [
@@ -396,50 +390,6 @@ function StatusBayarDomisiliView({ filters }: { filters: FilterState }) {
         <div className="w-full bg-slate-200 rounded-full h-2">
           <div className="bg-emerald-500 h-2 rounded-full" style={{ width: '91.2%' }}></div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// 7. Menu Analisis AI
-function AnalisisAIView({ filters }: { filters: FilterState }) {
-  // Simulasi Prompt Payload yang dikirim ke Model LLM AI
-  const aiPayload = useMemo(() => {
-    return JSON.stringify(
-      {
-        context: 'Executive Summary',
-        parameters: {
-          tahun_ajaran: filters.ta,
-          lokasi: filters.lokasi,
-          kecamatan: filters.kecamatan,
-          kelurahan: filters.kelurahan,
-          diskon: filters.diskon,
-        },
-      },
-      null,
-      2
-    );
-  }, [filters]);
-
-  return (
-    <div>
-      <h2 className="text-lg font-bold mb-1 flex items-center gap-2 text-indigo-700">
-        <Bot className="w-5 h-5" />
-        Analisis AI & Insight Otomatis
-      </h2>
-      <p className="text-xs text-slate-500 mb-4">Rekomendasi strategis yang dihasilkan oleh sistem AI berbasis konteks filter saat ini.</p>
-      <FilterBadgeSummary filters={filters} />
-
-      <div className="bg-slate-900 text-slate-100 p-3 rounded-md text-xs font-mono mb-4">
-        <p className="text-slate-400 font-sans text-[10px] mb-1">// Context Payload yang dikirim ke LLM Engine:</p>
-        <pre>{aiPayload}</pre>
-      </div>
-
-      <div className="p-4 bg-indigo-50/60 border border-indigo-200 rounded-lg space-y-2">
-        <p className="text-xs font-bold text-indigo-900">Insight Hasil Generator AI:</p>
-        <p className="text-xs text-indigo-800 leading-relaxed">
-          Berdasarkan data <b>{filters.ta}</b> untuk wilayah <b>{filters.kecamatan}</b>, tingkat efektivitas skema diskon <b>{filters.diskon}</b> berkorelasi positif dengan tingkat pelunasan sebesar 91.2%. Direkomendasikan untuk menambah alokasi kuota diskon pada <b>{filters.lokasi}</b> untuk meningkatkan retensi pendaftaran.
-        </p>
       </div>
     </div>
   );
