@@ -3,8 +3,7 @@ import pandas as pd
 import plotly.express as px
 import glob
 import json
-import urllib.request
-import urllib.error
+from openai import OpenAI
 
 # ---------------------------------------------------------
 # KONFIGURASI HALAMAN WEB & THEME
@@ -84,61 +83,27 @@ def style_chart(fig):
     return fig
 
 # ---------------------------------------------------------
-# HELPER GEMINI AI (DUAL HYBRID ENGINE: SDK google-genai & REST)
+# HELPER CHATGPT (OPENAI API)
 # ---------------------------------------------------------
-def ask_gemini_ai(api_key, prompt_text):
+def ask_chatgpt(api_key, prompt_text):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
         
-    # Bersihkan spasi, enter, dan tanda petik dari API Key
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
-    # Opsi 1: Menggunakan SDK resmi google-genai jika terpasang
     try:
-        from google import genai
-        client = genai.Client(api_key=clean_key)
-        response = client.models.generate_content(
-            model='gemini-1.5-flash',
-            contents=prompt_text,
+        client = OpenAI(api_key=clean_key)
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "Kamu adalah Management Consultant & Data Analyst senior untuk bimbingan belajar."},
+                {"role": "user", "content": prompt_text}
+            ],
+            temperature=0.7
         )
-        return response.text
-    except ImportError:
-        pass # Jika modul belum diinstall via pip, lanjut otomatis ke REST API
+        return response.choices[0].message.content
     except Exception as e:
-        return f"⚠️ **Error Gemini AI SDK:** {str(e)}"
-
-    # Opsi 2: Fallback Otomatis ke REST API Endpoint
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
-    headers = {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': clean_key
-    }
-    
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt_text}]
-        }]
-    }
-    
-    try:
-        data_json = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data=data_json, headers=headers)
-        
-        with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            return res_data['candidates'][0]['content']['parts'][0]['text']
-            
-    except urllib.error.HTTPError as e:
-        try:
-            raw_err = e.read().decode('utf-8')
-            err_json = json.loads(raw_err)
-            detail_msg = err_json.get('error', {}).get('message', raw_err)
-            return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
-        except Exception:
-            return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
-            
-    except Exception as e:
-        return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
+        return f"⚠️ **Gagal terhubung ke ChatGPT API:** {str(e)}"
 
 # ---------------------------------------------------------
 # HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
@@ -761,18 +726,18 @@ with tab7:
 
         st.divider()
 
-        # 2. INTEGRASI GEMINI AI API (OTOMATIS CEK SECRETS SERVER ATAU INPUT USER)
-        st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
+       # 2. INTEGRASI CHATGPT API (OPENAI)
+        st.subheader("✨ 2. Generative AI Executive Report (ChatGPT)")
         
-        system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
+        system_openai_key = st.secrets.get("OPENAI_API_KEY", "")
         
-        if system_gemini_key:
-            user_gemini_key = system_gemini_key
-            st.success("✅ **AI Key Terhubung dari Server System.**")
+        if system_openai_key:
+            user_openai_key = system_openai_key
+            st.success("✅ **API Key ChatGPT Terhubung dari Server System.**")
         else:
-            with st.expander("🔑 Pengaturan API Key Google Gemini", expanded=True):
-                st.write("Tempelkan API Key asli Anda dari [Google AI Studio (aistudio.google.com)](https://aistudio.google.com/app/apikey).")
-                user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
+            with st.expander("🔑 Pengaturan API Key OpenAI (ChatGPT)", expanded=True):
+                st.write("Tempelkan API Key asli Anda dari [OpenAI Platform](https://platform.openai.com/api-keys).")
+                user_openai_key = st.text_input("Masukkan OpenAI API Key Anda:", type="password", key="openai_key_input")
 
         ctx_lines = [
             f"Filter Terpilih: {ta_info}, {lb_info}, {dom_info}",
@@ -792,10 +757,10 @@ with tab7:
         data_context = "\n- ".join([""] + ctx_lines)
 
         if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
-            if not user_gemini_key:
+            if not user_openai_key:
                 st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
             else:
-                with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
+                with st.spinner("🤖 ChatGPT sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
                     prompt_narrative = f"""Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
@@ -806,7 +771,7 @@ Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresenta
 3. Peluang Ekspansi & Marketing
 4. 3 Langkah Strategis Prioritas (Actionable Steps)"""
                     
-                    ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
+                    ai_response = ask_chatgpt(user_openai_key, prompt_narrative)
                     st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
                     st.markdown(ai_response)
 
@@ -817,10 +782,10 @@ Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresenta
         
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
         if st.button("Tanyakan ke AI", use_container_width=True):
-            if not user_gemini_key:
+            if not user_openai_key:
                 st.warning("⚠️ API Key belum dimasukkan.")
             elif user_question:
-                with st.spinner("🤖 AI sedang memproses pertanyaan Anda..."):
+                with st.spinner("🤖 ChatGPT sedang memproses pertanyaan Anda..."):
                     prompt_q = f"""Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.
 Konteks data dashboard saat ini:
 {data_context}
@@ -828,8 +793,5 @@ Konteks data dashboard saat ini:
 Pertanyaan Pengguna: '{user_question}'
 
 Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."""
-                    answer = ask_gemini_ai(user_gemini_key, prompt_q)
+                    answer = ask_chatgpt(user_openai_key, prompt_q)
                     st.success(f"""**Jawaban AI:**\n\n{answer}""")
-
-    else:
-        st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
