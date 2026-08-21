@@ -84,7 +84,7 @@ def style_chart(fig):
     return fig
 
 # ---------------------------------------------------------
-# HELPER CHATGPT (OPENAI API)
+# HELPER CHATGPT (OPENAI REST API - TANPA INSTALL LIBRARY)
 # ---------------------------------------------------------
 def ask_chatgpt(api_key, prompt_text):
     if not api_key:
@@ -92,20 +92,41 @@ def ask_chatgpt(api_key, prompt_text):
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
+    url = "https://api.openai.com/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {clean_key}"
+    }
+    
+    payload = {
+        "model": "gpt-4o-mini",
+        "messages": [
+            {"role": "system", "content": "Kamu adalah Management Consultant & Data Analyst senior untuk bimbingan belajar."},
+            {"role": "user", "content": prompt_text}
+        ],
+        "temperature": 0.7
+    }
+    
     try:
-        client = OpenAI(api_key=clean_key)
-        response = client.chat.completions.create(
-            model="gpt-4o-mini",
-            messages=[
-                {"role": "system", "content": "Kamu adalah Management Consultant & Data Analyst senior untuk bimbingan belajar."},
-                {"role": "user", "content": prompt_text}
-            ],
-            temperature=0.7
-        )
-        return response.choices[0].message.content
+        data_json = json.dumps(payload).encode('utf-8')
+        req = urllib.request.Request(url, data=data_json, headers=headers)
+        
+        with urllib.request.urlopen(req) as response:
+            res_data = json.loads(response.read().decode('utf-8'))
+            return res_data['choices'][0]['message']['content']
+            
+    except urllib.error.HTTPError as e:
+        try:
+            raw_err = e.read().decode('utf-8')
+            err_json = json.loads(raw_err)
+            detail_msg = err_json.get('error', {}).get('message', raw_err)
+            return f"⚠️ **Respon Server OpenAI (HTTP {e.code}):** {detail_msg}"
+        except Exception:
+            return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
+            
     except Exception as e:
         return f"⚠️ **Gagal terhubung ke ChatGPT API:** {str(e)}"
-
+        
 # ---------------------------------------------------------
 # HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
 # ---------------------------------------------------------
