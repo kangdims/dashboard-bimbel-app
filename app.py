@@ -84,27 +84,24 @@ def style_chart(fig):
     return fig
 
 # ---------------------------------------------------------
-# HELPER CHATGPT (OPENAI REST API - TANPA INSTALL LIBRARY)
+# HELPER GEMINI AI (REST API Native Python)
 # ---------------------------------------------------------
-def ask_chatgpt(api_key, prompt_text):
+def ask_gemini_ai(api_key, prompt_text):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
-    url = "https://api.openai.com/v1/chat/completions"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {
-        "Content-Type": "application/json",
-        "Authorization": f"Bearer {clean_key}"
+        'Content-Type': 'application/json',
+        'x-goog-api-key': clean_key
     }
     
     payload = {
-        "model": "gpt-4o-mini",
-        "messages": [
-            {"role": "system", "content": "Kamu adalah Management Consultant & Data Analyst senior untuk bimbingan belajar."},
-            {"role": "user", "content": prompt_text}
-        ],
-        "temperature": 0.7
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
     }
     
     try:
@@ -113,20 +110,20 @@ def ask_chatgpt(api_key, prompt_text):
         
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
-            return res_data['choices'][0]['message']['content']
+            return res_data['candidates'][0]['content']['parts'][0]['text']
             
     except urllib.error.HTTPError as e:
         try:
             raw_err = e.read().decode('utf-8')
             err_json = json.loads(raw_err)
             detail_msg = err_json.get('error', {}).get('message', raw_err)
-            return f"⚠️ **Respon Server OpenAI (HTTP {e.code}):** {detail_msg}"
+            return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
         except Exception:
             return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
             
     except Exception as e:
-        return f"⚠️ **Gagal terhubung ke ChatGPT API:** {str(e)}"
-        
+        return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
+
 # ---------------------------------------------------------
 # HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
 # ---------------------------------------------------------
@@ -151,7 +148,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf612120" and input_pass == "nfms2026%":
+                if input_user == "staf" and input_pass == "nfms2026":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
@@ -252,7 +249,7 @@ if not df_diskon_raw.empty:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
 
 # ---------------------------------------------------------
-# MASTER FILTER (TEPAT DI BAWAH JUDUL UTAMA)
+# MASTER FILTER
 # ---------------------------------------------------------
 st.divider()
 
@@ -340,7 +337,6 @@ if not df_diskon.empty:
     if selected_nama_diskon != "Semua Jenis Diskon" and 'Nama Diskon' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['Nama Diskon'] == selected_nama_diskon]
 
-# Banner Indikator Filter Aktif
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
 dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
@@ -530,7 +526,7 @@ with tab4:
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan.")
 
-# --- TAB 5: PERBANDINGAN SISWA & KEUTUHAN MULTI-TA ---
+# --- TAB 5: PERBANDINGAN MULTI-TA ---
 with tab5:
     st.header("📈 Perbandingan Data Siswa & Tren 3 Tahun Ajaran")
     st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta pergeseran jenjang & status siswa antar TA.")
@@ -608,7 +604,7 @@ with tab5:
     else:
         st.warning("Data Siswa Multi-TA belum tersedia.")
 
-# --- TAB 6: STATUS BAYAR BERDASARKAN DOMISILI TERFILTER ---
+# --- TAB 6: STATUS BAYAR DOMISILI ---
 with tab6:
     st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
     st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Kecamatan, dan Kelurahan yang aktif di atas.")
@@ -713,7 +709,7 @@ with tab7:
     st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
 
     if not df_siswa.empty:
-        # 1. OTOMATISASI HIGHLIGHT DATA (SMART STATISTICAL AI INSIGHTS)
+        # 1. OTOMATISASI HIGHLIGHT DATA
         st.subheader("📌 1. Smart Executive Summary (Otomatis)")
         
         tot_siswa = len(df_siswa)
@@ -748,18 +744,18 @@ with tab7:
 
         st.divider()
 
-       # 2. INTEGRASI CHATGPT API (OPENAI)
-        st.subheader("✨ 2. Generative AI Executive Report (ChatGPT)")
+        # 2. INTEGRASI GEMINI AI API
+        st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
-        system_openai_key = st.secrets.get("OPENAI_API_KEY", "")
+        system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
         
-        if system_openai_key:
-            user_openai_key = system_openai_key
-            st.success("✅ **API Key ChatGPT Terhubung dari Server System.**")
+        if system_gemini_key:
+            user_gemini_key = system_gemini_key
+            st.success("✅ **AI Key Terhubung dari Server System.**")
         else:
-            with st.expander("🔑 Pengaturan API Key OpenAI (ChatGPT)", expanded=True):
-                st.write("Tempelkan API Key asli Anda dari [OpenAI Platform](https://platform.openai.com/api-keys).")
-                user_openai_key = st.text_input("Masukkan OpenAI API Key Anda:", type="password", key="openai_key_input")
+            with st.expander("🔑 Pengaturan API Key Google Gemini", expanded=True):
+                st.write("Dapatkan API Key gratis Anda dari [Google AI Studio](https://aistudio.google.com/app/apikey).")
+                user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
         ctx_lines = [
             f"Filter Terpilih: {ta_info}, {lb_info}, {dom_info}",
@@ -779,10 +775,10 @@ with tab7:
         data_context = "\n- ".join([""] + ctx_lines)
 
         if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
-            if not user_openai_key:
+            if not user_gemini_key:
                 st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
             else:
-                with st.spinner("🤖 ChatGPT sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
+                with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
                     prompt_narrative = f"""Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
@@ -793,21 +789,21 @@ Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresenta
 3. Peluang Ekspansi & Marketing
 4. 3 Langkah Strategis Prioritas (Actionable Steps)"""
                     
-                    ai_response = ask_chatgpt(user_openai_key, prompt_narrative)
+                    ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
                     st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
                     st.markdown(ai_response)
 
         st.divider()
 
-        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF SEPUTAR DATA
+        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF
         st.subheader("💬 3. Tanya AI Seputar Data Dashboard (Interactive Q&A)")
         
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
         if st.button("Tanyakan ke AI", use_container_width=True):
-            if not user_openai_key:
+            if not user_gemini_key:
                 st.warning("⚠️ API Key belum dimasukkan.")
             elif user_question:
-                with st.spinner("🤖 ChatGPT sedang memproses pertanyaan Anda..."):
+                with st.spinner("🤖 AI sedang memproses pertanyaan Anda..."):
                     prompt_q = f"""Anda adalah asisten AI Analis Data untuk Bimbingan Belajar.
 Konteks data dashboard saat ini:
 {data_context}
@@ -815,5 +811,8 @@ Konteks data dashboard saat ini:
 Pertanyaan Pengguna: '{user_question}'
 
 Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di atas."""
-                    answer = ask_chatgpt(user_openai_key, prompt_q)
+                    answer = ask_gemini_ai(user_gemini_key, prompt_q)
                     st.success(f"""**Jawaban AI:**\n\n{answer}""")
+
+    else:
+        st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
