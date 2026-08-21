@@ -2,7 +2,9 @@ import streamlit as st
 import pandas as pd
 import plotly.express as px
 import glob
-from openai import OpenAI
+import json
+import urllib.request
+import urllib.error
 
 # ---------------------------------------------------------
 # KONFIGURASI HALAMAN WEB & THEME
