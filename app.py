@@ -92,10 +92,10 @@ def ask_gemini_ai(api_key, prompt_text):
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
+    # URL Endpoint Gemini 2.5 Flash Terbaru
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={clean_key}"
     headers = {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': clean_key
+        'Content-Type': 'application/json'
     }
     
     payload = {
