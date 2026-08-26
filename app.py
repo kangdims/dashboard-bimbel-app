@@ -83,13 +83,15 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Pendaftaran Online vs Offline
+# Helper Function Pendaftaran Online vs Offline (Sesuai Logika Kolom Crt_By)
 def get_jalur_pendaftaran(crt_by):
     if pd.isna(crt_by):
         return 'Offline (Cabang / WA)'
     crt_str = str(crt_by).strip().upper()
     if 'PSB' in crt_str:
         return 'Online (Web PSB)'
+    elif '614012' in crt_str or '612120' in crt_str:
+        return 'Offline (Cabang / WA)'
     return 'Offline (Cabang / WA)'
 
 # ---------------------------------------------------------
@@ -157,7 +159,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf" and input_pass == "nfms2026":
+                if input_user == "staf612120" and input_pass == "nfms2026%":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
@@ -254,9 +256,15 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
-    # LOGIKA PENDAPATAN ONLINE VS OFFLINE (LANGKAH 1)
-    if 'Crt By' in df_siswa_raw.columns:
-        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw['Crt By'].apply(get_jalur_pendaftaran)
+    # LOGIKA PEMERIKSAAN KOLOM Crt_By ATAU Crt By
+    col_crt = None
+    if 'Crt_By' in df_siswa_raw.columns:
+        col_crt = 'Crt_By'
+    elif 'Crt By' in df_siswa_raw.columns:
+        col_crt = 'Crt By'
+        
+    if col_crt:
+        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_crt].apply(get_jalur_pendaftaran)
     else:
         df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
@@ -396,7 +404,6 @@ with tab1:
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
-            # Menghitung jumlah transaksi per metode bayar
             df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
             fig_pie = style_chart(px.pie(
                 df_pie_summary, 
@@ -404,7 +411,6 @@ with tab1:
                 values='Jumlah_Siswa', 
                 hole=0.4
             ))
-            # Menampilkan jumlah siswa dan persentase langsung di pie chart
             fig_pie.update_traces(
                 textinfo='value+percent', 
                 texttemplate='%{value} siswa<br>(%{percent})'
@@ -456,7 +462,6 @@ with tab2:
             fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
 
-        # DIAGRAM PIE ONLINE VS OFFLINE (LANGKAH 2)
         with c3:
             st.subheader("Proporsi Pendaftaran Online vs Offline")
             if 'Jalur_Daftar' in df_siswa.columns:
@@ -482,7 +487,7 @@ with tab2:
                 
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
             else:
-                st.warning("Kolom 'Crt By' tidak ditemukan pada data siswa.")
+                st.warning("Kolom 'Crt_By' tidak ditemukan pada data siswa.")
 
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
