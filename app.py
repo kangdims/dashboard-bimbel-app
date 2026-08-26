@@ -266,7 +266,7 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
-    # Pemetaan Jalur Pendaftaran
+    # Deteksi kolom Crt By langsung di Data Siswa
     col_crt_siswa = None
     for c in df_siswa_raw.columns:
         if 'crt' in str(c).lower():
@@ -276,12 +276,21 @@ if not df_siswa_raw.empty:
     if col_crt_siswa:
         df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_crt_siswa].apply(get_jalur_pendaftaran)
     elif not df_trx_raw.empty and 'Jalur_Daftar' in df_trx_raw.columns:
-        # Cari kunci pencocokan (kolom No / Nomor Siswa)
-        key_col = 'No' if 'No' in df_siswa_raw.columns and 'No' in df_trx_raw.columns else None
+        # PENCARIAN & PENSERAGAMAN KOLOM NOMOR SISWA (SOLUSI BUG NF CONDET)
+        key_col = 'No' if ('No' in df_siswa_raw.columns and 'No' in df_trx_raw.columns) else None
         
         if key_col:
-            mapping_jalur = df_trx_raw.drop_duplicates(subset=[key_col]).set_index(key_col)['Jalur_Daftar'].to_dict()
-            df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[key_col].map(mapping_jalur).fillna('Offline (Cabang / WA)')
+            # Format kunci transaksi & kunci siswa ke String bersih agar 100% cocok
+            trx_temp = df_trx_raw.copy()
+            siswa_temp_keys = df_siswa_raw[key_col].apply(clean_str)
+            
+            trx_temp['key_clean'] = trx_temp[key_col].apply(clean_str)
+            
+            # Buat mapping jalur daftar yang sudah dibersihkan
+            mapping_jalur = trx_temp.dropna(subset=['key_clean']).drop_duplicates(subset=['key_clean']).set_index('key_clean')['Jalur_Daftar'].to_dict()
+            
+            # Map ke Data Siswa menggunakan kunci string yang cocok
+            df_siswa_raw['Jalur_Daftar'] = siswa_temp_keys.map(mapping_jalur).fillna('Offline (Cabang / WA)')
         else:
             df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
     else:
