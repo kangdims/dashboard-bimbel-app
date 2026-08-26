@@ -234,8 +234,6 @@ if not df_trx_raw.empty:
         df_trx_raw['ta_clean'] = df_trx_raw['Idtahun'].apply(clean_str)
     if 'Biaya F' in df_trx_raw.columns:
         df_trx_raw['Kategori_Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
-    if 'Jenjang' in df_siswa_raw.columns:
-        df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
 
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
@@ -251,11 +249,6 @@ if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
 
-# 📌 SELIPKAN LANGKAH 1 DI SINI:
-    if 'Crt By' in df_siswa_raw.columns:
-        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw['Crt By'].apply(get_jalur_pendaftaran)
-    else:
-        df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 # ---------------------------------------------------------
 # MASTER FILTER
 # ---------------------------------------------------------
@@ -388,26 +381,11 @@ with tab1:
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
-    
-            # 1. Agregasi data untuk menghitung jumlah transaksi/siswa per metode bayar
-            df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
-    
-            # 2. Buat Pie Chart berdasarkan jumlah siswa
-            fig_pie = style_chart(px.pie(
-            df_pie_summary, 
-            names='Type Bayar', 
-            values='Jumlah_Siswa', 
-            hole=0.4
-            ))
-    
-            # 3. Tampilkan angka jumlah siswa DAN persentase secara langsung di dalam grafik
-            fig_pie.update_traces(
-            textinfo='value+percent', 
-            texttemplate='%{value} siswa<br>(%{percent})'
-            )
-    
+            fig_pie = style_chart(px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4))
             st.plotly_chart(fig_pie, use_container_width=True)
-    
+
+        st.divider()
+
         if 'Kategori_Siswa' in df_trx.columns:
             st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
             kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
@@ -432,43 +410,28 @@ with tab2:
 
         st.divider()
 
-        # 📌 UBAH BARIS INI (Ganti c1, c2 = st.columns(2) menjadi 3 kolom):
-        c1, c2, c3 = st.columns(3)
-        
+        c1, c2 = st.columns(2)
         with c1:
-            # Grafik Distribusi Status Siswa ...
-        
-        with c2:
-            # Grafik Distribusi Jenjang Kelas ...
-
-        # 📌 SELIPKAN LANGKAH 2 (DIAGRAM PIE ONLINE VS OFFLINE) DI SINI:
-        with c3:
-            st.subheader("Proporsi Pendaftaran Online vs Offline")
-            if 'Jalur_Daftar' in df_siswa.columns:
-                df_jalur = df_siswa['Jalur_Daftar'].value_counts().reset_index()
-                df_jalur.columns = ['Jalur Pendaftaran', 'Jumlah Siswa']
-                
-                fig_jalur_pie = style_chart(px.pie(
-                    df_jalur,
-                    names='Jalur Pendaftaran',
-                    values='Jumlah Siswa',
-                    hole=0.4,
-                    color='Jalur Pendaftaran',
-                    color_discrete_map={
-                        'Online (Web PSB)': '#00cc96',
-                        'Offline (Cabang / WA)': '#636efa'
-                    }
+            st.subheader("Distribusi Status Siswa (Biaya Formulir)")
+            if 'Kategori_Siswa' in df_siswa.columns:
+                kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
+                kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
+                fig_kat_siswa = style_chart(px.bar(
+                    kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah',
+                    color='Status Siswa'
                 ))
-                
-                fig_jalur_pie.update_traces(
-                    textinfo='value+percent',
-                    texttemplate='%{value} siswa<br>(%{percent})'
-                )
-                
-                st.plotly_chart(fig_jalur_pie, use_container_width=True)
-            else:
-                st.warning("Kolom 'Crt By' tidak ditemukan pada data siswa.")
-                
+                st.plotly_chart(fig_kat_siswa, use_container_width=True)
+
+        with c2:
+            st.subheader("Distribusi Jenjang Kelas")
+            jenjang_df = df_siswa['Jenjang'].value_counts().reset_index()
+            jenjang_df.columns = ['Jenjang', 'Jumlah']
+            fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
+            st.plotly_chart(fig_jenjang, use_container_width=True)
+
+    else:
+        st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
+
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
     if not df_siswa.empty:
