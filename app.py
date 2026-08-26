@@ -453,32 +453,9 @@ with tab3:
             st.plotly_chart(fig_sekolah, use_container_width=True)
 
         with c2:
-            st.write("📊 **Detail Sebaran Sekolah & Lokasi Belajar**")
-            sekolah_lb = df_siswa.groupby(['Asal Sekolah', 'lb_clean']).size().reset_index(name='Jumlah Siswa')
-            sekolah_lb.columns = ['Asal Sekolah', 'Lokasi Belajar', 'Jumlah Siswa']
-            sekolah_lb = sekolah_lb.sort_values(by='Jumlah Siswa', ascending=False)
-            st.dataframe(sekolah_lb, use_container_width=True, height=350)
-
-        st.divider()
-
-        st.subheader("2. Jumlah Riil & Persentase per Jenjang Berdasarkan Kecamatan Domisili")
-        if 'Kec Tinggal' in df_siswa.columns and 'Jenjang' in df_siswa.columns:
-            jenjang_kec = df_siswa.groupby(['Kec Tinggal', 'Jenjang']).size().reset_index(name='Jumlah_Siswa')
-            total_kec = jenjang_kec.groupby('Kec Tinggal')['Jumlah_Siswa'].transform('sum')
-            jenjang_kec['Persentase'] = (jenjang_kec['Jumlah_Siswa'] / total_kec * 100).round(1)
-            jenjang_kec['Label_Text'] = jenjang_kec.apply(lambda r: f"{r['Jumlah_Siswa']} ({r['Persentase']}%)", axis=1)
-
-            fig_jenjang_kec = style_chart(px.bar(
-                jenjang_kec,
-                x='Kec Tinggal',
-                y='Jumlah_Siswa',
-                color='Jenjang',
-                barmode='group',
-                text='Label_Text',
-                labels={'Kec Tinggal': 'Kecamatan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}
-            ))
-            fig_jenjang_kec.update_traces(textposition='outside')
-            st.plotly_chart(fig_jenjang_kec, use_container_width=True)
+    st.subheader("Proporsi Metode Pembayaran")
+    fig_pie = style_chart(px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4))
+    st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
 
