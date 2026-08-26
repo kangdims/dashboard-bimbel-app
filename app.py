@@ -382,26 +382,25 @@ with tab1:
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
     
-    # 1. Agregasi data untuk menghitung jumlah transaksi/siswa per metode bayar
-    df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
+            # 1. Agregasi data untuk menghitung jumlah transaksi/siswa per metode bayar
+            df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
     
-    # 2. Buat Pie Chart berdasarkan jumlah siswa
-    fig_pie = style_chart(px.pie(
-    df_pie_summary, 
-    names='Type Bayar', 
-    values='Jumlah_Siswa', 
-    hole=0.4
-    ))
+            # 2. Buat Pie Chart berdasarkan jumlah siswa
+            fig_pie = style_chart(px.pie(
+            df_pie_summary, 
+            names='Type Bayar', 
+            values='Jumlah_Siswa', 
+            hole=0.4
+            ))
     
-    # 3. Tampilkan angka jumlah siswa DAN persentase secara langsung di dalam grafik
-    fig_pie.update_traces(
-    textinfo='value+percent', 
-    texttemplate='%{value} siswa<br>(%{percent})'
-    )
+            # 3. Tampilkan angka jumlah siswa DAN persentase secara langsung di dalam grafik
+            fig_pie.update_traces(
+            textinfo='value+percent', 
+            texttemplate='%{value} siswa<br>(%{percent})'
+            )
     
-        st.plotly_chart(fig_pie, use_container_width=True)
-        st.divider()
-
+            st.plotly_chart(fig_pie, use_container_width=True)
+    
         if 'Kategori_Siswa' in df_trx.columns:
             st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
             kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
