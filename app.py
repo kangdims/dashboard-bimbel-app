@@ -432,28 +432,43 @@ with tab2:
 
         st.divider()
 
-        c1, c2 = st.columns(2)
+        # 📌 UBAH BARIS INI (Ganti c1, c2 = st.columns(2) menjadi 3 kolom):
+        c1, c2, c3 = st.columns(3)
+        
         with c1:
-            st.subheader("Distribusi Status Siswa (Biaya Formulir)")
-            if 'Kategori_Siswa' in df_siswa.columns:
-                kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
-                kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
-                fig_kat_siswa = style_chart(px.bar(
-                    kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah',
-                    color='Status Siswa'
-                ))
-                st.plotly_chart(fig_kat_siswa, use_container_width=True)
-
+            # Grafik Distribusi Status Siswa ...
+        
         with c2:
-            st.subheader("Distribusi Jenjang Kelas")
-            jenjang_df = df_siswa['Jenjang'].value_counts().reset_index()
-            jenjang_df.columns = ['Jenjang', 'Jumlah']
-            fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
-            st.plotly_chart(fig_jenjang, use_container_width=True)
+            # Grafik Distribusi Jenjang Kelas ...
 
-    else:
-        st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
-
+        # 📌 SELIPKAN LANGKAH 2 (DIAGRAM PIE ONLINE VS OFFLINE) DI SINI:
+        with c3:
+            st.subheader("Proporsi Pendaftaran Online vs Offline")
+            if 'Jalur_Daftar' in df_siswa.columns:
+                df_jalur = df_siswa['Jalur_Daftar'].value_counts().reset_index()
+                df_jalur.columns = ['Jalur Pendaftaran', 'Jumlah Siswa']
+                
+                fig_jalur_pie = style_chart(px.pie(
+                    df_jalur,
+                    names='Jalur Pendaftaran',
+                    values='Jumlah Siswa',
+                    hole=0.4,
+                    color='Jalur Pendaftaran',
+                    color_discrete_map={
+                        'Online (Web PSB)': '#00cc96',
+                        'Offline (Cabang / WA)': '#636efa'
+                    }
+                ))
+                
+                fig_jalur_pie.update_traces(
+                    textinfo='value+percent',
+                    texttemplate='%{value} siswa<br>(%{percent})'
+                )
+                
+                st.plotly_chart(fig_jalur_pie, use_container_width=True)
+            else:
+                st.warning("Kolom 'Crt By' tidak ditemukan pada data siswa.")
+                
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
     if not df_siswa.empty:
