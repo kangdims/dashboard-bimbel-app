@@ -379,21 +379,26 @@ with tab1:
             st.plotly_chart(fig_line, use_container_width=True)
 
         with c2:
-            st.subheader("Proporsi Metode Pembayaran")
-            fig_pie = style_chart(px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4))
-            st.plotly_chart(fig_pie, use_container_width=True)
-
-        st.divider()
-
-        if 'Kategori_Siswa' in df_trx.columns:
-            st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
-            kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
-            kat_trx_df.columns = ['Status Siswa', 'Jumlah Transaksi']
-            fig_kat_trx = style_chart(px.bar(
-                kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi',
-                color='Status Siswa'
-            ))
-            st.plotly_chart(fig_kat_trx, use_container_width=True)
+    st.subheader("Proporsi Metode Pembayaran")
+    
+    # 1. Agregasi data untuk menghitung jumlah transaksi/siswa per metode bayar
+    df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
+    
+    # 2. Buat Pie Chart berdasarkan jumlah siswa
+    fig_pie = style_chart(px.pie(
+        df_pie_summary, 
+        names='Type Bayar', 
+        values='Jumlah_Siswa', 
+        hole=0.4
+    ))
+    
+    # 3. Tampilkan angka jumlah siswa DAN persentase secara langsung di dalam grafik
+    fig_pie.update_traces(
+        textinfo='value+percent', 
+        texttemplate='%{value} siswa<br>(%{percent})'
+    )
+    
+    st.plotly_chart(fig_pie, use_container_width=True)
 
     else:
         st.warning(f"Data Transaksi tidak ditemukan untuk filter terpilih.")
