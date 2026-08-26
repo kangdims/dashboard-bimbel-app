@@ -84,10 +84,10 @@ def style_chart(fig):
     return fig
 
 # Helper Function Pendaftaran Online vs Offline (Sesuai Logika Kolom Crt_By)
-def get_jalur_pendaftaran(crt_by):
-    if pd.isna(crt_by):
+def get_jalur_pendaftaran(Crt_By):
+    if pd.isna(Crt_By):
         return 'Offline (Cabang / WA)'
-    crt_str = str(crt_by).strip().upper()
+    crt_str = str(Crt_By).strip().upper()
     if 'PSB' in crt_str:
         return 'Online (Web PSB)'
     elif '614012' in crt_str or '612120' in crt_str:
