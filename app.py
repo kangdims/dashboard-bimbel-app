@@ -84,14 +84,17 @@ def style_chart(fig):
     return fig
 
 # Helper Function Pendaftaran Online vs Offline (Sesuai Logika Kolom Crt_By)
-def get_jalur_pendaftaran(Crt_By):
-    if pd.isna(Crt_By):
+def get_jalur_pendaftaran(crt_by):
+    if pd.isna(crt_by):
         return 'Offline (Cabang / WA)'
-    crt_str = str(Crt_By).strip().upper()
+    
+    # Konversi ke string, hapus spasi di awal/akhir, dan ubah ke huruf kapital
+    crt_str = str(crt_by).strip().upper()
+    
+    # Cek apakah kata 'PSB' ada di dalam isi kolom
     if 'PSB' in crt_str:
         return 'Online (Web PSB)'
-    elif '614012' in crt_str or '612120' in crt_str:
-        return 'Offline (Cabang / WA)'
+    
     return 'Offline (Cabang / WA)'
 
 # ---------------------------------------------------------
@@ -256,15 +259,16 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
-    # LOGIKA PEMERIKSAAN KOLOM Crt_By ATAU Crt By
-    col_crt = None
-    if 'Crt_By' in df_siswa_raw.columns:
-        col_crt = 'Crt_By'
-    elif 'Crt By' in df_siswa_raw.columns:
-        col_crt = 'Crt By'
-        
-    if col_crt:
-        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_crt].apply(get_jalur_pendaftaran)
+    # --- LOGIKA PENETAPAN KOLOM CRT BY (LEBIH FLEKSIBEL) ---
+    # Mencari nama kolom yang mengandung kata 'crt' tanpa mempedulikan spasi/underscore/huruf besar-kecil
+    crt_col_found = None
+    for col in df_siswa_raw.columns:
+        if 'crt' in str(col).lower():
+            crt_col_found = col
+            break
+            
+    if crt_col_found:
+        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[crt_col_found].apply(get_jalur_pendaftaran)
     else:
         df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
