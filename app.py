@@ -83,6 +83,15 @@ def style_chart(fig):
     )
     return fig
 
+# Helper Function Pendaftaran Online vs Offline
+def get_jalur_pendaftaran(crt_by):
+    if pd.isna(crt_by):
+        return 'Offline (Cabang / WA)'
+    crt_str = str(crt_by).strip().upper()
+    if 'PSB' in crt_str:
+        return 'Online (Web PSB)'
+    return 'Offline (Cabang / WA)'
+
 # ---------------------------------------------------------
 # HELPER GEMINI AI (REST API Native Python)
 # ---------------------------------------------------------
@@ -244,6 +253,12 @@ if not df_siswa_raw.empty:
         df_siswa_raw['Kategori_Siswa'] = df_siswa_raw['Biaya Formulir'].apply(get_kategori_siswa)
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
+        
+    # LOGIKA PENDAPATAN ONLINE VS OFFLINE (LANGKAH 1)
+    if 'Crt By' in df_siswa_raw.columns:
+        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw['Crt By'].apply(get_jalur_pendaftaran)
+    else:
+        df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
@@ -381,7 +396,19 @@ with tab1:
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
-            fig_pie = style_chart(px.pie(df_trx, names='Type Bayar', values='Jumlah', hole=0.4))
+            # Menghitung jumlah transaksi per metode bayar
+            df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
+            fig_pie = style_chart(px.pie(
+                df_pie_summary, 
+                names='Type Bayar', 
+                values='Jumlah_Siswa', 
+                hole=0.4
+            ))
+            # Menampilkan jumlah siswa dan persentase langsung di pie chart
+            fig_pie.update_traces(
+                textinfo='value+percent', 
+                texttemplate='%{value} siswa<br>(%{percent})'
+            )
             st.plotly_chart(fig_pie, use_container_width=True)
 
         st.divider()
@@ -410,9 +437,9 @@ with tab2:
 
         st.divider()
 
-        c1, c2 = st.columns(2)
+        c1, c2, c3 = st.columns(3)
         with c1:
-            st.subheader("Distribusi Status Siswa (Biaya Formulir)")
+            st.subheader("Distribusi Status Siswa")
             if 'Kategori_Siswa' in df_siswa.columns:
                 kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
                 kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
@@ -428,6 +455,34 @@ with tab2:
             jenjang_df.columns = ['Jenjang', 'Jumlah']
             fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
+
+        # DIAGRAM PIE ONLINE VS OFFLINE (LANGKAH 2)
+        with c3:
+            st.subheader("Proporsi Pendaftaran Online vs Offline")
+            if 'Jalur_Daftar' in df_siswa.columns:
+                df_jalur = df_siswa['Jalur_Daftar'].value_counts().reset_index()
+                df_jalur.columns = ['Jalur Pendaftaran', 'Jumlah Siswa']
+                
+                fig_jalur_pie = style_chart(px.pie(
+                    df_jalur,
+                    names='Jalur Pendaftaran',
+                    values='Jumlah Siswa',
+                    hole=0.4,
+                    color='Jalur Pendaftaran',
+                    color_discrete_map={
+                        'Online (Web PSB)': '#00cc96',
+                        'Offline (Cabang / WA)': '#636efa'
+                    }
+                ))
+                
+                fig_jalur_pie.update_traces(
+                    textinfo='value+percent',
+                    texttemplate='%{value} siswa<br>(%{percent})'
+                )
+                
+                st.plotly_chart(fig_jalur_pie, use_container_width=True)
+            else:
+                st.warning("Kolom 'Crt By' tidak ditemukan pada data siswa.")
 
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
@@ -730,6 +785,11 @@ with tab7:
         smart_bullets.append(f"**Pertumbuhan & Volume:** Terdata **{tot_siswa} siswa** terdaftar pada filter aktif (**{ta_info}**, **{lb_info}**).")
         smart_bullets.append(f"**Kinerja Keuangan:** Dari total omset paket **Rp {tot_paket:,.0f}**, penerimaan tunai (Cash In) adalah **Rp {tot_bayar:,.0f} ({pct_pelunasan:.1f}%)**, menyisakan piutang sebesar **Rp {tot_tagihan:,.0f}**.".replace(',', '.'))
         
+        if 'Jalur_Daftar' in df_siswa.columns:
+            top_jalur = df_siswa['Jalur_Daftar'].value_counts()
+            jalur_txt = ", ".join([f"**{k}** ({v} siswa)" for k, v in top_jalur.items()])
+            smart_bullets.append(f"**Jalur Pendaftaran:** Sebaran pendaftar saat ini yaitu {jalur_txt}.")
+        
         if 'Asal Sekolah' in df_siswa.columns:
             top_3_sch = df_siswa['Asal Sekolah'].value_counts().head(3)
             sch_text = ", ".join([f"**{k}** ({v} siswa)" for k, v in top_3_sch.items()])
@@ -766,6 +826,9 @@ with tab7:
             f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
             f"Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
         ]
+        if 'Jalur_Daftar' in df_siswa.columns:
+            jalur_str = ', '.join([f'{k}: {v}' for k,v in df_siswa['Jalur_Daftar'].value_counts().items()])
+            ctx_lines.append(f"Metode Pendaftaran: {jalur_str}")
         if 'Asal Sekolah' in df_siswa.columns:
             top_sch_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Asal Sekolah'].value_counts().head(5).items()])
             ctx_lines.append(f"Top Asal Sekolah: {top_sch_str}")
