@@ -83,12 +83,12 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Pendaftaran Online vs Offline (Sesuai Nilai Crt By)
-def get_jalur_pendaftaran(crt_by):
-    if pd.isna(crt_by):
+# Helper Function Pendaftaran Online vs Offline dari kolom 'Cara Daftar'
+def get_jalur_pendaftaran_from_cara_daftar(val):
+    if pd.isna(val):
         return 'Offline (Cabang / WA)'
-    crt_str = str(crt_by).strip().upper()
-    if 'PSB' in crt_str:
+    val_str = str(val).strip().upper()
+    if 'PSB' in val_str or 'ONLINE' in val_str or 'WEB' in val_str:
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
@@ -236,7 +236,6 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
-# 1. Olah data Transaksi dan cari kolom Crt By
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -245,17 +244,7 @@ if not df_trx_raw.empty:
     if 'Biaya F' in df_trx_raw.columns:
         df_trx_raw['Kategori_Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
 
-    # Deteksi fleksibel kolom Crt By di file transaksi
-    col_crt_trx = None
-    for c in df_trx_raw.columns:
-        if 'crt' in str(c).lower():
-            col_crt_trx = c
-            break
-            
-    if col_crt_trx:
-        df_trx_raw['Jalur_Daftar'] = df_trx_raw[col_crt_trx].apply(get_jalur_pendaftaran)
-
-# 2. Olah data Siswa & Sinkronkan Jalur Pendaftaran dari Transaksi
+# REVISI UTAMA: Mengambil Jalur Pendaftaran langsung dari kolom 'Cara Daftar' (atau variasi sejenis) di file Data Siswa
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
         df_siswa_raw['lb_clean'] = df_siswa_raw['lb'].apply(format_lb)
@@ -266,35 +255,23 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
-    # Deteksi kolom Crt By langsung di Data Siswa
-    col_crt_siswa = None
+    # Deteksi fleksibel kolom 'Cara Daftar' / 'CaraDaftar' / 'Cara_Daftar'
+    col_cara_daftar = None
     for c in df_siswa_raw.columns:
-        if 'crt' in str(c).lower():
-            col_crt_siswa = c
+        c_clean = str(c).lower().replace(' ', '').replace('_', '')
+        if 'caradaftar' in c_clean or 'caradaft' in c_clean:
+            col_cara_daftar = c
             break
             
-    if col_crt_siswa:
-        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_crt_siswa].apply(get_jalur_pendaftaran)
-    elif not df_trx_raw.empty and 'Jalur_Daftar' in df_trx_raw.columns:
-        # PENCARIAN & PENSERAGAMAN KOLOM NOMOR SISWA (SOLUSI BUG NF CONDET)
-        key_col = 'No' if ('No' in df_siswa_raw.columns and 'No' in df_trx_raw.columns) else None
-        
-        if key_col:
-            # Format kunci transaksi & kunci siswa ke String bersih agar 100% cocok
-            trx_temp = df_trx_raw.copy()
-            siswa_temp_keys = df_siswa_raw[key_col].apply(clean_str)
-            
-            trx_temp['key_clean'] = trx_temp[key_col].apply(clean_str)
-            
-            # Buat mapping jalur daftar yang sudah dibersihkan
-            mapping_jalur = trx_temp.dropna(subset=['key_clean']).drop_duplicates(subset=['key_clean']).set_index('key_clean')['Jalur_Daftar'].to_dict()
-            
-            # Map ke Data Siswa menggunakan kunci string yang cocok
-            df_siswa_raw['Jalur_Daftar'] = siswa_temp_keys.map(mapping_jalur).fillna('Offline (Cabang / WA)')
+    if col_cara_daftar:
+        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_cara_daftar].apply(get_jalur_pendaftaran_from_cara_daftar)
+    else:
+        # Fallback fleksibel jika namanya sedikit berbeda (misal ada kata 'cara' atau 'daftar')
+        alt_col = next((c for c in df_siswa_raw.columns if 'daftar' in str(c).lower() or 'cara' in str(c).lower()), None)
+        if alt_col:
+            df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[alt_col].apply(get_jalur_pendaftaran_from_cara_daftar)
         else:
             df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
-    else:
-        df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
@@ -515,7 +492,7 @@ with tab2:
                 
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
             else:
-                st.warning("Data Jalur Pendaftaran tidak dapat dipetakan.")
+                st.warning("Kolom 'Cara Daftar' tidak ditemukan pada file Data Siswa.")
 
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
