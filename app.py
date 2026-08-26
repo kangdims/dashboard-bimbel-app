@@ -83,18 +83,13 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Pendaftaran Online vs Offline (Sesuai Logika Kolom Crt_By)
+# Helper Function Pendaftaran Online vs Offline (Sesuai Nilai Crt By)
 def get_jalur_pendaftaran(crt_by):
     if pd.isna(crt_by):
         return 'Offline (Cabang / WA)'
-    
-    # Konversi ke string, hapus spasi di awal/akhir, dan ubah ke huruf kapital
     crt_str = str(crt_by).strip().upper()
-    
-    # Cek apakah kata 'PSB' ada di dalam isi kolom
     if 'PSB' in crt_str:
         return 'Online (Web PSB)'
-    
     return 'Offline (Cabang / WA)'
 
 # ---------------------------------------------------------
@@ -107,7 +102,7 @@ def ask_gemini_ai(api_key, prompt_text):
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
     # URL Endpoint Gemini 1.5 Flash Resmi & Stabil
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {
         'Content-Type': 'application/json'
     }
@@ -162,7 +157,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf612120" and input_pass == "nfms2026%":
+                if input_user == "staf" and input_pass == "nfms2026":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
@@ -241,6 +236,7 @@ df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
 df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
 df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
 
+# 1. Olah data Transaksi dan cari kolom Crt By
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -249,6 +245,17 @@ if not df_trx_raw.empty:
     if 'Biaya F' in df_trx_raw.columns:
         df_trx_raw['Kategori_Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
 
+    # Deteksi fleksibel kolom Crt By di file transaksi
+    col_crt_trx = None
+    for c in df_trx_raw.columns:
+        if 'crt' in str(c).lower():
+            col_crt_trx = c
+            break
+            
+    if col_crt_trx:
+        df_trx_raw['Jalur_Daftar'] = df_trx_raw[col_crt_trx].apply(get_jalur_pendaftaran)
+
+# 2. Olah data Siswa & Sinkronkan Jalur Pendaftaran dari Transaksi
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
         df_siswa_raw['lb_clean'] = df_siswa_raw['lb'].apply(format_lb)
@@ -259,16 +266,24 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
-    # --- LOGIKA PENETAPAN KOLOM CRT BY (LEBIH FLEKSIBEL) ---
-    # Mencari nama kolom yang mengandung kata 'crt' tanpa mempedulikan spasi/underscore/huruf besar-kecil
-    crt_col_found = None
-    for col in df_siswa_raw.columns:
-        if 'crt' in str(col).lower():
-            crt_col_found = col
+    # Pemetaan Jalur Pendaftaran
+    col_crt_siswa = None
+    for c in df_siswa_raw.columns:
+        if 'crt' in str(c).lower():
+            col_crt_siswa = c
             break
             
-    if crt_col_found:
-        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[crt_col_found].apply(get_jalur_pendaftaran)
+    if col_crt_siswa:
+        df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_crt_siswa].apply(get_jalur_pendaftaran)
+    elif not df_trx_raw.empty and 'Jalur_Daftar' in df_trx_raw.columns:
+        # Cari kunci pencocokan (kolom No / Nomor Siswa)
+        key_col = 'No' if 'No' in df_siswa_raw.columns and 'No' in df_trx_raw.columns else None
+        
+        if key_col:
+            mapping_jalur = df_trx_raw.drop_duplicates(subset=[key_col]).set_index(key_col)['Jalur_Daftar'].to_dict()
+            df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[key_col].map(mapping_jalur).fillna('Offline (Cabang / WA)')
+        else:
+            df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
     else:
         df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
@@ -491,16 +506,10 @@ with tab2:
                 
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
             else:
-                st.warning("Kolom 'Crt_By' tidak ditemukan pada data siswa.")
+                st.warning("Data Jalur Pendaftaran tidak dapat dipetakan.")
 
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
-
-# Tambahkan di Tab 2 sementara untuk cek isi kolom aslinya
-with tab2:
-    if 'Jalur_Daftar' in df_siswa.columns:
-        # Menampilkan 10 nilai unik dari kolom Crt_By
-        st.write("🔍 **Debug Nilai Kolom Crt_By:**", df_siswa_raw[crt_col_found].unique() if crt_col_found else "Kolom Crt tidak ditemukan")
 
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
