@@ -496,6 +496,12 @@ with tab2:
     else:
         st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
 
+# Tambahkan di Tab 2 sementara untuk cek isi kolom aslinya
+with tab2:
+    if 'Jalur_Daftar' in df_siswa.columns:
+        # Menampilkan 10 nilai unik dari kolom Crt_By
+        st.write("🔍 **Debug Nilai Kolom Crt_By:**", df_siswa_raw[crt_col_found].unique() if crt_col_found else "Kolom Crt tidak ditemukan")
+
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
     if not df_siswa.empty:
