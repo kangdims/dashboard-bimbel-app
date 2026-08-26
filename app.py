@@ -234,6 +234,16 @@ if not df_trx_raw.empty:
         df_trx_raw['ta_clean'] = df_trx_raw['Idtahun'].apply(clean_str)
     if 'Biaya F' in df_trx_raw.columns:
         df_trx_raw['Kategori_Siswa'] = df_trx_raw['Biaya F'].apply(get_kategori_siswa)
+    if 'Jenjang' in df_siswa_raw.columns:
+        df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
+
+def get_jalur_pendaftaran(crt_by):
+    if pd.isna(crt_by):
+        return 'Offline'
+    crt_str = str(crt_by).strip().upper()
+    if 'PSB' in crt_str:
+        return 'Online (Web PSB)'
+    return 'Offline (Cabang / WA)'
 
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
@@ -245,9 +255,25 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
 
+def get_jalur_pendaftaran(crt_by):
+    if pd.isna(crt_by):
+        return 'Offline'
+    crt_str = str(crt_by).strip().upper()
+    if 'PSB' in crt_str:
+        return 'Online (Web PSB)'
+    return 'Offline (Cabang / WA)'
+
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
+
+def get_jalur_pendaftaran(crt_by):
+    if pd.isna(crt_by):
+        return 'Offline'
+    crt_str = str(crt_by).strip().upper()
+    if 'PSB' in crt_str:
+        return 'Online (Web PSB)'
+    return 'Offline (Cabang / WA)'
 
 # ---------------------------------------------------------
 # MASTER FILTER
