@@ -98,6 +98,22 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
+# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan
+def extract_diskon_juara_from_catatan(catatan_val):
+    if pd.isna(catatan_val):
+        return None
+    cat_str = str(catatan_val).strip().upper()
+    
+    if 'LUNAS JUARA' in cat_str or 'LUNASJUARA' in cat_str:
+        return 'Lunas Juara'
+    elif 'DISKON JUARA' in cat_str or 'DISKONJUARA' in cat_str:
+        return 'Diskon Juara'
+    elif 'JUARA' in cat_str:
+        return 'Diskon Juara'
+    elif 'PSJ' in cat_str:
+        return 'Diskon PSJ'
+    return None
+
 # ---------------------------------------------------------
 # HELPER GEMINI AI (REST API Native Python)
 # ---------------------------------------------------------
@@ -280,44 +296,90 @@ if not df_siswa_raw.empty:
         else:
             df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
-# INTEGRASI DATA DISKON DENGAN SISWA DAN TRANSAKSI
+# ---------------------------------------------------------
+# EKSTRAKSI & INTEGRASI DATA DISKON BESERTA DISKON DARIPADA KOLOM CATATAN
+# ---------------------------------------------------------
+list_diskon_records = []
+
+# 1. Dari File Diskon (20260828_data_diskon_2627.xlsx)
 if not df_diskon_raw.empty:
-    if 'Kode Lokasi' in df_diskon_raw.columns:
-        df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
-    
-    # Kunci Integrasi Diskon
     col_form_d = next((c for c in df_diskon_raw.columns if 'nomor' in str(c).lower() and 'form' in str(c).lower()), 'Nomor Formulir')
     col_kwt_d = next((c for c in df_diskon_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
-    
-    df_diskon_raw['f_clean'] = df_diskon_raw[col_form_d].apply(clean_str) if col_form_d in df_diskon_raw.columns else None
-    df_diskon_raw['k_clean'] = df_diskon_raw[col_kwt_d].apply(clean_str) if col_kwt_d in df_diskon_raw.columns else None
+    col_nama_d = next((c for c in df_diskon_raw.columns if 'nama' in str(c).lower() and 'diskon' in str(c).lower()), 'Nama Diskon')
+    col_besar_d = next((c for c in df_diskon_raw.columns if 'besar' in str(c).lower() or 'nominal' in str(c).lower()), 'Besar Diskon')
 
-    # Mapped Data dari Data Siswa
+    for _, row in df_diskon_raw.iterrows():
+        list_diskon_records.append({
+            'Nomor Formulir': clean_str(row.get(col_form_d)),
+            'Kwitansi': clean_str(row.get(col_kwt_d)),
+            'Nama Diskon': str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus',
+            'Besar Diskon': float(row.get(col_besar_d)) if pd.notna(row.get(col_besar_d)) and str(row.get(col_besar_d)).replace('.','',1).isdigit() else 0.0,
+            'Sumber': 'File Diskon'
+        })
+
+# 2. Dari File Data Siswa (20260828_data_siswanf_2627.xlsx) pada Kolom Catatan
+if not df_siswa_raw.empty:
+    col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
+    col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
+    col_kwt_s = next((c for c in df_siswa_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
+
+    if col_cat_s:
+        for _, row in df_siswa_raw.iterrows():
+            jenis_diskon_cat = extract_diskon_juara_from_catatan(row.get(col_cat_s))
+            if jenis_diskon_cat:
+                list_diskon_records.append({
+                    'Nomor Formulir': clean_str(row.get(col_form_s)),
+                    'Kwitansi': clean_str(row.get(col_kwt_s)),
+                    'Nama Diskon': jenis_diskon_cat,
+                    'Besar Diskon': 0.0,
+                    'Sumber': 'Catatan Siswa'
+                })
+
+# 3. Dari File Transaksi (20260828_data_trx_laporan_2627.xlsx) pada Kolom Catatan
+if not df_trx_raw.empty:
+    col_cat_t = next((c for c in df_trx_raw.columns if 'catatan' in str(c).lower()), None)
+    col_form_t = next((c for c in df_trx_raw.columns if 'nomor f' in str(c).lower() or 'form' in str(c).lower()), 'Nomor F')
+    col_kwt_t = next((c for c in df_trx_raw.columns if 'nokwt' in str(c).lower() or 'kwt' in str(c).lower()), 'Nokwt')
+
+    if col_cat_t:
+        for _, row in df_trx_raw.iterrows():
+            jenis_diskon_cat = extract_diskon_juara_from_catatan(row.get(col_cat_t))
+            if jenis_diskon_cat:
+                list_diskon_records.append({
+                    'Nomor Formulir': clean_str(row.get(col_form_t)),
+                    'Kwitansi': clean_str(row.get(col_kwt_t)),
+                    'Nama Diskon': jenis_diskon_cat,
+                    'Besar Diskon': 0.0,
+                    'Sumber': 'Catatan Transaksi'
+                })
+
+# Gabungkan seluruh rekap data diskon
+df_diskon_combined = pd.DataFrame(list_diskon_records)
+
+if not df_diskon_combined.empty:
+    # Hapus duplikat pencatatan jika ada kombinasi Formulir + Kwitansi + Nama Diskon yang persis sama
+    df_diskon_combined = df_diskon_combined.drop_duplicates(subset=['Nomor Formulir', 'Kwitansi', 'Nama Diskon'])
+    
+    # Hubungkan metadata dari Data Siswa & Transaksi
     if not df_siswa_raw.empty:
         col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
         col_kwt_s = next((c for c in df_siswa_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
         
         df_siswa_meta = df_siswa_raw.copy()
         df_siswa_meta['f_clean'] = df_siswa_meta[col_form_s].apply(clean_str) if col_form_s in df_siswa_meta.columns else None
-        df_siswa_meta['k_clean'] = df_siswa_meta[col_kwt_s].apply(clean_str) if col_kwt_s in df_siswa_meta.columns else None
-
-        # Ambil metadata siswa (TA, Jenjang, Kecamatan, Kelurahan)
+        
         meta_cols = ['ta_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal', 'lb_clean']
         meta_cols = [c for c in meta_cols if c in df_siswa_meta.columns]
         
         if 'f_clean' in df_siswa_meta.columns:
             map_siswa_f = df_siswa_meta.dropna(subset=['f_clean']).drop_duplicates(subset=['f_clean']).set_index('f_clean')[meta_cols]
             for col in meta_cols:
-                df_diskon_raw[col] = df_diskon_raw['f_clean'].map(map_siswa_f[col]) if col not in df_diskon_raw.columns or df_diskon_raw[col].isna().all() else df_diskon_raw[col]
+                df_diskon_combined[col] = df_diskon_combined['Nomor Formulir'].map(map_siswa_f[col])
 
-    # Mapped Data dari Data Transaksi (Fallback jika di Siswa belum terhubung)
     if not df_trx_raw.empty:
         col_form_t = next((c for c in df_trx_raw.columns if 'nomor f' in str(c).lower() or 'form' in str(c).lower()), 'Nomor F')
-        col_kwt_t = next((c for c in df_trx_raw.columns if 'nokwt' in str(c).lower() or 'kwt' in str(c).lower()), 'Nokwt')
-        
         df_trx_meta = df_trx_raw.copy()
         df_trx_meta['f_clean'] = df_trx_meta[col_form_t].apply(clean_str) if col_form_t in df_trx_meta.columns else None
-        df_trx_meta['k_clean'] = df_trx_meta[col_kwt_t].apply(clean_str) if col_kwt_t in df_trx_meta.columns else None
 
         meta_cols_t = ['ta_clean', 'Jenjang', 'lb_clean']
         meta_cols_t = [c for c in meta_cols_t if c in df_trx_meta.columns]
@@ -325,10 +387,12 @@ if not df_diskon_raw.empty:
         if 'f_clean' in df_trx_meta.columns:
             map_trx_f = df_trx_meta.dropna(subset=['f_clean']).drop_duplicates(subset=['f_clean']).set_index('f_clean')[meta_cols_t]
             for col in meta_cols_t:
-                if col in df_diskon_raw.columns:
-                    df_diskon_raw[col] = df_diskon_raw[col].fillna(df_diskon_raw['f_clean'].map(map_trx_f[col]))
+                if col in df_diskon_combined.columns:
+                    df_diskon_combined[col] = df_diskon_combined[col].fillna(df_diskon_combined['Nomor Formulir'].map(map_trx_f[col]))
                 else:
-                    df_diskon_raw[col] = df_diskon_raw['f_clean'].map(map_trx_f[col])
+                    df_diskon_combined[col] = df_diskon_combined['Nomor Formulir'].map(map_trx_f[col])
+                    
+df_diskon_raw = df_diskon_combined.copy()
 
 # ---------------------------------------------------------
 # MASTER FILTER (5 FILTER AKTIF)
@@ -624,32 +688,45 @@ with tab3:
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
 
-# --- TAB 4: DISKON KHUSUS (TERINTEGRASI DENGAN SEMUA FILTER) ---
+# --- TAB 4: DISKON KHUSUS (TERMASUK DATAPAKET JUARA/PSJ DARI CATATAN) ---
 with tab4:
-    st.header("🏷️ Analisis Siswa Pendaftar Diskon Khusus")
-    st.info("💡 **Tersinkronisasi:** Data diskon telah terintegrasi melalui perelasian Nomor Formulir & Kwitansi dengan Data Siswa dan Transaksi.")
+    st.header("🏷️ Analisis Siswa Pendaftar Diskon Khusus & Program Juara/PSJ")
+    st.info("💡 **Tersinkronisasi:** Menampilkan gabungan data diskon khusus serta pendaftar program PSJ/Juara/Diskon Juara dari kolom Catatan Data Siswa & Transaksi.")
 
     if not df_diskon.empty:
         col1, col2, col3, col4 = st.columns(4)
         
         tot_diskon_nominal = df_diskon['Besar Diskon'].sum() if 'Besar Diskon' in df_diskon.columns else 0
-        avg_diskon_nominal = df_diskon['Besar Diskon'].mean() if 'Besar Diskon' in df_diskon.columns else 0
+        avg_diskon_nominal = df_diskon[df_diskon['Besar Diskon'] > 0]['Besar Diskon'].mean() if 'Besar Diskon' in df_diskon.columns else 0
         cnt_diskon_jenis = df_diskon['Nama Diskon'].nunique() if 'Nama Diskon' in df_diskon.columns else 0
 
         col1.metric("Penerima Diskon Terfilter", f"{len(df_diskon)} Siswa")
         col2.metric("Total Nominal Diskon", f"Rp {tot_diskon_nominal:,.0f}".replace(',', '.'))
-        col3.metric("Rata-rata Diskon", f"Rp {avg_diskon_nominal:,.0f}".replace(',', '.'))
+        col3.metric("Rata-rata Diskon (Kupon)", f"Rp {avg_diskon_nominal:,.0f}".replace(',', '.'))
         col4.metric("Kategori Diskon", f"{cnt_diskon_jenis} Jenis")
 
         st.divider()
 
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("Distribusi Jenis Diskon Terpakai")
+            st.subheader("Distribusi Jenis Diskon Terpakai (Termasuk PSJ/Juara)")
             if 'Nama Diskon' in df_diskon.columns:
                 diskon_type = df_diskon['Nama Diskon'].value_counts().reset_index()
                 diskon_type.columns = ['Nama Diskon', 'Jumlah Siswa']
-                fig_diskon_pie = style_chart(px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4))
+                
+                fig_diskon_pie = style_chart(px.pie(
+                    diskon_type, 
+                    names='Nama Diskon', 
+                    values='Jumlah Siswa', 
+                    hole=0.4
+                ))
+                
+                # Tampilkan Angka Siswa & Persentase
+                fig_diskon_pie.update_traces(
+                    textinfo='value+percent',
+                    texttemplate='%{value} siswa<br>(%{percent})'
+                )
+                
                 st.plotly_chart(fig_diskon_pie, use_container_width=True)
 
         with c2:
@@ -662,8 +739,8 @@ with tab4:
 
         st.divider()
 
-        st.subheader("Detail Data Siswa Penerima Diskon (Terfilter)")
-        disp_cols = [c for c in ['Nomor Formulir', 'Kwitansi', 'Nama Diskon', 'Besar Diskon', 'lb_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal'] if c in df_diskon.columns]
+        st.subheader("Detail Data Siswa Penerima Diskon & Program Juara (Terfilter)")
+        disp_cols = [c for c in ['Nomor Formulir', 'Kwitansi', 'Nama Diskon', 'Besar Diskon', 'Sumber', 'lb_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal'] if c in df_diskon.columns]
         st.dataframe(df_diskon[disp_cols], use_container_width=True)
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
