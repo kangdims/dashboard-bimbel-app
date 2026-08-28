@@ -98,24 +98,27 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
-# REVISI LOGIKA: Penyatuan Kategori Diskon Juara / PSJ
+# REVISI LOGIKA UTAMA: Pengetatan Pemicu Angsuran Juara
 def extract_diskon_juara_from_catatan(catatan_val):
     if pd.isna(catatan_val):
         return None
     cat_str = str(catatan_val).strip().upper()
     
-    # 1. Pisahkan jika ada keterangan Formulir + Angsuran / Diangsur
-    if ('FORMULIR' in cat_str or 'FORM' in cat_str) and ('ANGSURAN' in cat_str or 'ANGSUR' in cat_str or 'ANGS' in cat_str):
-        return 'Juara (Formulir + Angsuran 1)'
-    elif 'ANGSURAN 1' in cat_str or 'ANGSURAN1' in cat_str or 'ANGS 1' in cat_str:
-        return 'Juara (Formulir + Angsuran 1)'
+    # 1. Wajib mengandung kata JUARA atau PSJ
+    if 'JUARA' in cat_str or 'PSJ' in cat_str:
+        # Cek apakah ada kata "FORMULIR" sekaligus indikator "ANGSURAN"
+        has_formulir = 'FORM' in cat_str or 'FORMULIR' in cat_str
+        has_angsuran = 'ANGSUR' in cat_str or 'ANGS' in cat_str or 'CICIL' in cat_str
         
-    # 2. Satukan Diskon Juara, PSJ, Lunas Juara, dll. menjadi satu kategori
-    elif any(kw in cat_str for kw in ['JUARA', 'PSJ', 'LUNAS JUARA', 'DISKON JUARA']):
+        # Hanya masuk kategori Angsur jika "JUARA" + "FORMULIR" + "ANGSURAN" muncul bersamaan
+        if has_formulir and has_angsuran:
+            return 'Juara (Formulir + Angsuran 1)'
+            
+        # Jika hanya bayar formulir Juara atau lunas Juara/PSJ biasa
         return 'Diskon Juara / PSJ'
         
     return None
-
+    
 # ---------------------------------------------------------
 # HELPER GEMINI AI (REST API Native Python)
 # ---------------------------------------------------------
