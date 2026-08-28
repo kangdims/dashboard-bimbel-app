@@ -98,27 +98,23 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
-# REVISI LOGIKA UTAMA: Pengetatan Pemicu Angsuran Juara
+# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan (LOGIKA DIPERKETAT)
 def extract_diskon_juara_from_catatan(catatan_val):
     if pd.isna(catatan_val):
         return None
     cat_str = str(catatan_val).strip().upper()
     
-    # 1. Wajib mengandung kata JUARA atau PSJ
     if 'JUARA' in cat_str or 'PSJ' in cat_str:
-        # Cek apakah ada kata "FORMULIR" sekaligus indikator "ANGSURAN"
         has_formulir = 'FORM' in cat_str or 'FORMULIR' in cat_str
         has_angsuran = 'ANGSUR' in cat_str or 'ANGS' in cat_str or 'CICIL' in cat_str
         
-        # Hanya masuk kategori Angsur jika "JUARA" + "FORMULIR" + "ANGSURAN" muncul bersamaan
         if has_formulir and has_angsuran:
             return 'Juara (Formulir + Angsuran 1)'
             
-        # Jika hanya bayar formulir Juara atau lunas Juara/PSJ biasa
         return 'Diskon Juara / PSJ'
         
     return None
-    
+
 # ---------------------------------------------------------
 # HELPER GEMINI AI (REST API Native Python)
 # ---------------------------------------------------------
@@ -127,27 +123,16 @@ def ask_gemini_ai(api_key, prompt_text):
         return "⚠️ **API Key tidak boleh kosong.**"
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    
-    # URL Endpoint Gemini 1.5 Flash Resmi & Stabil
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
-    headers = {
-        'Content-Type': 'application/json'
-    }
-    
-    payload = {
-        "contents": [{
-            "parts": [{"text": prompt_text}]
-        }]
-    }
+    headers = {'Content-Type': 'application/json'}
+    payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
     try:
         data_json = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(url, data=data_json, headers=headers)
-        
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             return res_data['candidates'][0]['content']['parts'][0]['text']
-            
     except urllib.error.HTTPError as e:
         try:
             raw_err = e.read().decode('utf-8')
@@ -156,12 +141,11 @@ def ask_gemini_ai(api_key, prompt_text):
             return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
         except Exception:
             return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
-            
     except Exception as e:
         return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
 # ---------------------------------------------------------
-# HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
+# HEADER UTAMA & AKSES ADMIN POP-UP
 # ---------------------------------------------------------
 if 'admin_logged_in' not in st.session_state:
     st.session_state.admin_logged_in = False
@@ -301,12 +285,9 @@ if not df_siswa_raw.empty:
         else:
             df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
-# ---------------------------------------------------------
-# EKSTRAKSI & INTEGRASI DATA DISKON BESERTA CATATAN JUARA
-# ---------------------------------------------------------
+# EKSTRAKSI DATA DISKON
 list_diskon_records = []
 
-# 1. Dari File Diskon (20260828_data_diskon_2627.xlsx)
 if not df_diskon_raw.empty:
     col_form_d = next((c for c in df_diskon_raw.columns if 'nomor' in str(c).lower() and 'form' in str(c).lower()), 'Nomor Formulir')
     col_kwt_d = next((c for c in df_diskon_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
@@ -322,8 +303,6 @@ if not df_diskon_raw.empty:
             val_diskon = 0.0
 
         raw_nama = str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus'
-        
-        # Normalkan nama diskon jika ada kata Juara / PSJ di file diskon
         nama_diskon_clean = extract_diskon_juara_from_catatan(raw_nama) or raw_nama
 
         list_diskon_records.append({
@@ -334,7 +313,6 @@ if not df_diskon_raw.empty:
             'Sumber': 'File Diskon'
         })
 
-# 2. Dari File Data Siswa (20260828_data_siswanf_2627.xlsx) pada Kolom Catatan
 if not df_siswa_raw.empty:
     col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
     col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
@@ -352,7 +330,6 @@ if not df_siswa_raw.empty:
                     'Sumber': 'Catatan Siswa'
                 })
 
-# 3. Dari File Transaksi (20260828_data_trx_laporan_2627.xlsx) pada Kolom Catatan
 if not df_trx_raw.empty:
     col_cat_t = next((c for c in df_trx_raw.columns if 'catatan' in str(c).lower()), None)
     col_form_t = next((c for c in df_trx_raw.columns if 'nomor f' in str(c).lower() or 'form' in str(c).lower()), 'Nomor F')
@@ -370,13 +347,11 @@ if not df_trx_raw.empty:
                     'Sumber': 'Catatan Transaksi'
                 })
 
-# Gabungkan seluruh rekap data diskon
 df_diskon_combined = pd.DataFrame(list_diskon_records)
 
 if not df_diskon_combined.empty:
     df_diskon_combined = df_diskon_combined.drop_duplicates(subset=['Nomor Formulir', 'Kwitansi', 'Nama Diskon'])
     
-    # Hubungkan metadata dari Data Siswa & Transaksi
     if not df_siswa_raw.empty:
         col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
         df_siswa_meta = df_siswa_raw.copy()
@@ -762,86 +737,190 @@ with tab4:
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
 
-# --- TAB 5: PERBANDINGAN MULTI-TA ---
+# --- TAB 5: PERBANDINGAN MULTI-TA (9 METRIK LENGKAP BERSAMA KINERJA TREN) ---
 with tab5:
-    st.header("📈 Perbandingan Data Siswa & Tren 3 Tahun Ajaran")
-    st.info("💡 Menganalisis pertumbuhan pendaftaran siswa, finansial paket bimbingan, serta pergeseran jenjang & status siswa antar TA.")
+    st.header("📈 Analisis & Komparasi Tren Multi-Tahun Ajaran (Multi-TA)")
+    st.info("💡 **Tersinkronisasi:** Seluruh grafik di bawah ini membandingkan tren performa antar Tahun Ajaran berdasarkan Lokasi, Jenjang, dan Domisili terfilter.")
 
-    if not df_siswa_raw.empty and 'ta_clean' in df_siswa_raw.columns:
-        df_siswa_filtered = df_siswa_raw.copy()
+    # Siapkan DataFrame Filtered tanpa batasan Tahun Ajaran (agar bisa membandingkan TA)
+    df_s_comp = df_siswa_raw.copy()
+    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['lb_clean'] == selected_lb]
+    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['Jenjang'] == selected_jenjang]
+    if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['Kec Tinggal'] == selected_kec]
+    if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['Kel Tinggal'] == selected_kel]
+
+    df_t_comp = df_trx_raw.copy()
+    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_t_comp.columns:
+        df_t_comp = df_t_comp[df_t_comp['lb_clean'] == selected_lb]
+    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_t_comp.columns:
+        df_t_comp = df_t_comp[df_t_comp['Jenjang'] == selected_jenjang]
+
+    if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
         
-        if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_siswa_filtered.columns:
-            df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
+        # Helper Kalkulasi Delta (%)
+        def calculate_delta_df(df_grouped, col_cat, col_val='Jumlah'):
+            df_pivot = df_grouped.pivot(index='ta_clean', columns=col_cat, values=col_val).fillna(0)
+            df_diff = df_pivot.diff().fillna(0)
+            df_pct = (df_pivot.pct_change() * 100).fillna(0).round(1)
+            return df_pivot, df_diff, df_pct
+
+        # ---------------------------------------------------------
+        # 1. Jumlah Siswa Lama / Baru
+        # ---------------------------------------------------------
+        st.subheader("1. Jumlah Siswa Lama vs Baru per TA")
+        if 'Kategori_Siswa' in df_s_comp.columns:
+            g1 = df_s_comp.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah')
+            c1, c2 = st.columns(2)
+            with c1:
+                fig1_bar = style_chart(px.bar(g1, x='ta_clean', y='Jumlah', color='Kategori_Siswa', barmode='group', text_auto=True, title="Diagram Batang Kategori Siswa"))
+                st.plotly_chart(fig1_bar, use_container_width=True)
+            with c2:
+                fig1_pie = style_chart(px.pie(g1, names='Kategori_Siswa', values='Jumlah', color='ta_clean', hole=0.4, title="Proporsi Akumulasi Status Siswa"))
+                fig1_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
+                st.plotly_chart(fig1_pie, use_container_width=True)
             
-        if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_siswa_filtered.columns:
-            df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Jenjang'] == selected_jenjang]
+            piv1, diff1, pct1 = calculate_delta_df(g1, 'Kategori_Siswa')
+            st.caption("📈 **Perubahan Angka & Persentase (YoY):**")
+            st.dataframe(piv1.style.highlight_max(axis=0), use_container_width=True)
 
-        if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_siswa_filtered.columns:
-            df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Kec Tinggal'] == selected_kec]
-            
-        if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_siswa_filtered.columns:
-            df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Kel Tinggal'] == selected_kel]
+        st.divider()
 
-        if not df_siswa_filtered.empty:
-            col_ta1, col_ta2 = st.columns(2)
+        # ---------------------------------------------------------
+        # 2. Komparasi Paket Bimbingan vs Cash In per TA
+        # ---------------------------------------------------------
+        st.subheader("2. Komparasi Paket Bimbingan vs Realisasi Cash In per TA")
+        g2 = df_s_comp.groupby('ta_clean').agg(
+            Nilai_Paket=('Biaya Paket', 'sum'),
+            Cash_In=('Total Bayar', 'sum')
+        ).reset_index()
+        
+        g2_melt = g2.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], var_name='Kategori', value_name='Nominal')
+        g2_melt['Kategori'] = g2_melt['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In (Bayar)'})
 
-            with col_ta1:
-                st.subheader("1. Pertumbuhan Jumlah Siswa Terdaftar per TA")
-                siswa_ta = df_siswa_filtered.groupby('ta_clean').size().reset_index(name='Jumlah Siswa')
-                siswa_ta.columns = ['Tahun Ajaran', 'Jumlah Siswa']
-                
-                fig_siswa_ta = style_chart(px.line(
-                    siswa_ta, x='Tahun Ajaran', y='Jumlah Siswa', markers=True, 
-                    text='Jumlah Siswa', color_discrete_sequence=['#00cc96']
-                ))
-                fig_siswa_ta.update_traces(textposition="top center", line=dict(width=3))
-                st.plotly_chart(fig_siswa_ta, use_container_width=True)
+        c1, c2 = st.columns(2)
+        with c1:
+            fig2_bar = style_chart(px.bar(g2_melt, x='ta_clean', y='Nominal', color='Kategori', barmode='group', text_auto='.3s', title="Perbandingan Nilai Paket vs Cash In"))
+            st.plotly_chart(fig2_bar, use_container_width=True)
+        with c2:
+            fig2_pie = style_chart(px.pie(g2_melt, names='Kategori', values='Nominal', hole=0.4, title="Proporsi Realisasi Bimbingan vs Cash In"))
+            fig2_pie.update_traces(textinfo='value+percent')
+            st.plotly_chart(fig2_pie, use_container_width=True)
 
-            with col_ta2:
-                st.subheader("2. Komparasi Paket Bimbingan vs Cash In per TA")
-                fin_ta = df_siswa_filtered.groupby('ta_clean').agg(
-                    Nilai_Paket=('Biaya Paket', 'sum'),
-                    Cash_In=('Total Bayar', 'sum')
-                ).reset_index()
-                fin_ta_melted = fin_ta.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], 
-                                            var_name='Kategori', value_name='Nominal')
-                fin_ta_melted['Kategori'] = fin_ta_melted['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In'})
-                
-                fig_fin_ta = style_chart(px.bar(
-                    fin_ta_melted, x='ta_clean', y='Nominal', color='Kategori', barmode='group',
-                    text_auto='.3s', labels={'ta_clean': 'Tahun Ajaran'}
-                ))
-                st.plotly_chart(fig_fin_ta, use_container_width=True)
+        st.divider()
 
-            st.divider()
+        # ---------------------------------------------------------
+        # 3. Tren Pendapatan Harian
+        # ---------------------------------------------------------
+        st.subheader("3. Tren Pendapatan Harian Antar TA")
+        if not df_t_comp.empty and 'Tanggal' in df_t_comp.columns:
+            df_t_comp['Tanggal'] = pd.to_datetime(df_t_comp['Tanggal'])
+            df_t_comp['Bulan_Tgl'] = df_t_comp['Tanggal'].dt.strftime('%m-%d')
+            g3 = df_t_comp.groupby(['Bulan_Tgl', 'ta_clean'])['Jumlah'].sum().reset_index()
 
-            if 'Kategori_Siswa' in df_siswa_filtered.columns:
-                st.subheader("3. Perbandingan Status Siswa (Lama / Baru / NFIC) Antar TA")
-                kat_ta = df_siswa_filtered.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah Siswa')
-                fig_kat_ta = style_chart(px.bar(
-                    kat_ta, x='ta_clean', y='Jumlah Siswa', color='Kategori_Siswa', barmode='group',
-                    text_auto=True, labels={'ta_clean': 'Tahun Ajaran', 'Kategori_Siswa': 'Status Siswa'}
-                ))
-                st.plotly_chart(fig_kat_ta, use_container_width=True)
+            fig3_line = style_chart(px.line(g3, x='Bulan_Tgl', y='Jumlah', color='ta_clean', markers=True, title="Grafik Tren Pendapatan Harian (Disetarakan Tanggal & Bulan)"))
+            st.plotly_chart(fig3_line, use_container_width=True)
 
-            st.divider()
+        st.divider()
 
-            st.subheader("4. Rekapitulasi Data Siswa Multi-Tahun Ajaran")
-            rekap_ta = df_siswa_filtered.groupby('ta_clean').agg(
-                Total_Siswa=('No', 'count'),
-                Total_Paket=('Biaya Paket', 'sum'),
-                Total_Bayar=('Total Bayar', 'sum'),
-                Total_Tagihan=('Tagihan', 'sum'),
-                Rata_Paket=('Biaya Paket', 'mean')
-            ).reset_index()
+        # ---------------------------------------------------------
+        # 4. Proporsi Metode Pembayaran
+        # ---------------------------------------------------------
+        st.subheader("4. Proporsi & Distribusi Metode Pembayaran per TA")
+        if not df_t_comp.empty and 'Type Bayar' in df_t_comp.columns:
+            g4 = df_t_comp.groupby(['ta_clean', 'Type Bayar']).size().reset_index(name='Jumlah')
+            c1, c2 = st.columns(2)
+            with c1:
+                fig4_bar = style_chart(px.bar(g4, x='ta_clean', y='Jumlah', color='Type Bayar', barmode='group', text_auto=True, title="Diagram Batang Metode Pembayaran"))
+                st.plotly_chart(fig4_bar, use_container_width=True)
+            with c2:
+                fig4_pie = style_chart(px.pie(g4, names='Type Bayar', values='Jumlah', hole=0.4, title="Proporsi Metode Pembayaran"))
+                fig4_pie.update_traces(textinfo='value+percent', texttemplate='%{value} trx<br>(%{percent})')
+                st.plotly_chart(fig4_pie, use_container_width=True)
 
-            rekap_ta.columns = ['Tahun Ajaran (TA)', 'Jumlah Siswa', 'Total Nilai Paket', 'Total Cash In', 'Sisa Tagihan', 'Rata-rata Nilai Paket/Siswa']
-            st.dataframe(rekap_ta, use_container_width=True)
-        else:
-            st.warning("Data Siswa Multi-TA tidak ditemukan untuk kombinasi Lokasi & Domisili terpilih.")
+        st.divider()
+
+        # ---------------------------------------------------------
+        # 5. Distribusi Jenjang Kelas
+        # ---------------------------------------------------------
+        st.subheader("5. Distribusi Jenjang Kelas per TA")
+        if 'Jenjang' in df_s_comp.columns:
+            g5 = df_s_comp.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah')
+            c1, c2 = st.columns(2)
+            with c1:
+                fig5_bar = style_chart(px.bar(g5, x='Jenjang', y='Jumlah', color='ta_clean', barmode='group', text_auto=True, title="Perbandingan Jenjang Kelas Antar TA"))
+                st.plotly_chart(fig5_bar, use_container_width=True)
+            with c2:
+                fig5_pie = style_chart(px.pie(g5, names='Jenjang', values='Jumlah', hole=0.4, title="Proporsi Akumulasi Jenjang Kelas"))
+                fig5_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
+                st.plotly_chart(fig5_pie, use_container_width=True)
+
+        st.divider()
+
+        # ---------------------------------------------------------
+        # 6. Proporsi Pendaftaran Online vs Offline
+        # ---------------------------------------------------------
+        st.subheader("6. Proporsi Pendaftaran Online vs Offline per TA")
+        if 'Jalur_Daftar' in df_s_comp.columns:
+            g6 = df_s_comp.groupby(['ta_clean', 'Jalur_Daftar']).size().reset_index(name='Jumlah')
+            c1, c2 = st.columns(2)
+            with c1:
+                fig6_bar = style_chart(px.bar(g6, x='ta_clean', y='Jumlah', color='Jalur_Daftar', barmode='group', text_auto=True, title="Diagram Batang Jalur Pendaftaran"))
+                st.plotly_chart(fig6_bar, use_container_width=True)
+            with c2:
+                fig6_pie = style_chart(px.pie(g6, names='Jalur_Daftar', values='Jumlah', hole=0.4, title="Proporsi Pendaftaran Online vs Offline"))
+                fig6_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
+                st.plotly_chart(fig6_pie, use_container_width=True)
+
+        st.divider()
+
+        # ---------------------------------------------------------
+        # 7. Top Asal Sekolah Pendaftar
+        # ---------------------------------------------------------
+        st.subheader("7. Top Asal Sekolah Pendaftar per TA")
+        if 'Asal Sekolah' in df_s_comp.columns:
+            top_sch_list = df_s_comp['Asal Sekolah'].value_counts().head(10).index
+            df_top_sch = df_s_comp[df_s_comp['Asal Sekolah'].isin(top_sch_list)]
+            g7 = df_top_sch.groupby(['Asal Sekolah', 'ta_clean']).size().reset_index(name='Jumlah')
+
+            fig7_bar = style_chart(px.bar(g7, x='Asal Sekolah', y='Jumlah', color='ta_clean', barmode='group', text_auto=True, title="10 Sekolah Penyumbang Siswa Terbanyak per TA"))
+            st.plotly_chart(fig7_bar, use_container_width=True)
+
+        st.divider()
+
+        # ---------------------------------------------------------
+        # 8. Detail Sebaran Sekolah & Lokasi Belajar
+        # ---------------------------------------------------------
+        st.subheader("8. Detail Sebaran Sekolah & Lokasi Belajar Antar TA")
+        if 'Asal Sekolah' in df_s_comp.columns and 'lb_clean' in df_s_comp.columns:
+            g8 = df_s_comp.groupby(['ta_clean', 'Asal Sekolah', 'lb_clean']).size().reset_index(name='Jumlah_Siswa')
+            st.dataframe(g8.sort_values(by=['ta_clean', 'Jumlah_Siswa'], ascending=[True, False]), use_container_width=True)
+
+        st.divider()
+
+        # ---------------------------------------------------------
+        # 9. Presentase Status Bayar per Domisili
+        # ---------------------------------------------------------
+        st.subheader("9. Persentase Status Bayar per Domisili (Lunas vs Angsuran) Antar TA")
+        if 'Tagihan' in df_s_comp.columns and 'Kec Tinggal' in df_s_comp.columns:
+            df_s_comp['Status_Bayar'] = df_s_comp['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
+            dom_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" else 'Kec Tinggal'
+            g9 = df_s_comp.groupby(['ta_clean', dom_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
+
+            c1, c2 = st.columns(2)
+            with c1:
+                fig9_bar = style_chart(px.bar(g9, x=dom_col, y='Jumlah', color='Status_Bayar', facet_col='ta_clean', barmode='stack', text_auto=True, title="Status Bayar per Domisili per TA"))
+                st.plotly_chart(fig9_bar, use_container_width=True)
+            with c2:
+                fig9_pie = style_chart(px.pie(g9, names='Status_Bayar', values='Jumlah', hole=0.4, title="Proporsi Lunas vs Angsuran"))
+                fig9_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
+                st.plotly_chart(fig9_pie, use_container_width=True)
 
     else:
-        st.warning("Data Siswa Multi-TA belum tersedia.")
+        st.warning("Data multi-tahun ajaran tidak cukup untuk ditampilkan.")
 
 # --- TAB 6: STATUS BAYAR DOMISILI ---
 with tab6:
