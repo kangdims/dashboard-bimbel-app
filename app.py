@@ -74,8 +74,6 @@ JENJANG_MAP = {
     'O': 'RONIN'
 }
 
-JENJANG_ORDER = ['4 SD', '5 SD', '6 SD', '7 SMP', '8 SMP', '9 SMP', '10 SMA', '11 SMA', '12 SMA', 'RONIN']
-
 # Helper Function Plotly Transparent
 def style_chart(fig):
     fig.update_layout(
@@ -85,7 +83,7 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Pendaftaran Online vs Offline
+# Helper Function Pendaftaran Online vs Offline dari kolom 'Cara Daftar'
 def get_jalur_pendaftaran_from_cara_daftar(val):
     if pd.isna(val):
         return 'Offline (Cabang / WA)'
@@ -103,16 +101,26 @@ def ask_gemini_ai(api_key, prompt_text):
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
     
+    # URL Endpoint Gemini 1.5 Flash Resmi & Stabil
     url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
-    headers = {'Content-Type': 'application/json'}
-    payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
+    headers = {
+        'Content-Type': 'application/json'
+    }
+    
+    payload = {
+        "contents": [{
+            "parts": [{"text": prompt_text}]
+        }]
+    }
     
     try:
         data_json = json.dumps(payload).encode('utf-8')
         req = urllib.request.Request(url, data=data_json, headers=headers)
+        
         with urllib.request.urlopen(req) as response:
             res_data = json.loads(response.read().decode('utf-8'))
             return res_data['candidates'][0]['content']['parts'][0]['text']
+            
     except urllib.error.HTTPError as e:
         try:
             raw_err = e.read().decode('utf-8')
@@ -121,11 +129,12 @@ def ask_gemini_ai(api_key, prompt_text):
             return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
         except Exception:
             return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
+            
     except Exception as e:
         return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
 # ---------------------------------------------------------
-# HEADER UTAMA & AKSES ADMIN POP-UP
+# HEADER UTAMA & AKSES ADMIN POP-UP (POJOK KANAN ATAS)
 # ---------------------------------------------------------
 if 'admin_logged_in' not in st.session_state:
     st.session_state.admin_logged_in = False
@@ -245,6 +254,7 @@ if not df_siswa_raw.empty:
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
         
+    # Deteksi fleksibel kolom 'Cara Daftar'
     col_cara_daftar = None
     for c in df_siswa_raw.columns:
         c_clean = str(c).lower().replace(' ', '').replace('_', '')
@@ -264,15 +274,9 @@ if not df_siswa_raw.empty:
 if not df_diskon_raw.empty:
     if 'Kode Lokasi' in df_diskon_raw.columns:
         df_diskon_raw['lb_clean'] = df_diskon_raw['Kode Lokasi'].apply(format_lb)
-    if 'TA' in df_diskon_raw.columns:
-        df_diskon_raw['ta_clean'] = df_diskon_raw['TA'].apply(clean_str)
-    if 'Idtahun' in df_diskon_raw.columns:
-        df_diskon_raw['ta_clean'] = df_diskon_raw['Idtahun'].apply(clean_str)
-    if 'Jenjang' in df_diskon_raw.columns:
-        df_diskon_raw['Jenjang'] = df_diskon_raw['Jenjang'].apply(format_jenjang)
 
 # ---------------------------------------------------------
-# MASTER FILTER (6 KOLOM DENGAN JENJANG KELAS)
+# MASTER FILTER
 # ---------------------------------------------------------
 st.divider()
 
@@ -292,11 +296,17 @@ if 'lb_clean' in df_diskon_raw.columns:
     all_lb_set.update(df_diskon_raw['lb_clean'].dropna())
 list_master_lb = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
 
-# Opsi Filter Jenjang Kelas (4 SD - RONIN)
+# Daftar Urutan Jenjang Kelas Lengkap (4 SD hingga RONIN)
+JENJANG_ORDER = ["4 SD", "5 SD", "6 SD", "7 SMP", "8 SMP", "9 SMP", "10 SMA", "11 SMA", "12 SMA", "RONIN"]
 all_jenjang_set = set()
 if 'Jenjang' in df_siswa_raw.columns:
     all_jenjang_set.update(df_siswa_raw['Jenjang'].dropna())
-sorted_jenjang = [j for j in JENJANG_ORDER if j in all_jenjang_set] + sorted(list(all_jenjang_set - set(JENJANG_ORDER)))
+
+sorted_jenjang = [j for j in JENJANG_ORDER if j in all_jenjang_set]
+for j in sorted(all_jenjang_set):
+    if j not in sorted_jenjang:
+        sorted_jenjang.append(j)
+
 list_master_jenjang = ["Semua Jenjang"] + sorted_jenjang
 
 f_col1, f_col2, f_col3, f_col4, f_col5, f_col6 = st.columns(6)
@@ -345,7 +355,7 @@ with f_col6:
     selected_nama_diskon = st.selectbox("🏷️ Jenis Diskon:", list_nama_diskon)
 
 # ---------------------------------------------------------
-# APLIKASI FILTER KE ALL DATAFRAMES (DENGAN SINERGI TOTAL)
+# APLIKASI FILTER KE DATAFRAME
 # ---------------------------------------------------------
 df_trx = df_trx_raw.copy()
 if not df_trx.empty:
@@ -367,36 +377,35 @@ if not df_siswa.empty:
     if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_siswa.columns:
         df_siswa = df_siswa[df_siswa['Kel Tinggal'] == selected_kel]
 
-# SINERGI FILTER DISKON DENGAN SELURUH FILTER MASTER
+# APLIKASI FILTER KE DATA DISKON (TERHUBUNG KE SEMUA FILTER)
 df_diskon = df_diskon_raw.copy()
 if not df_diskon.empty:
     if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['lb_clean'] == selected_lb]
     if selected_nama_diskon != "Semua Jenis Diskon" and 'Nama Diskon' in df_diskon.columns:
         df_diskon = df_diskon[df_diskon['Nama Diskon'] == selected_nama_diskon]
-    if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['ta_clean'] == selected_ta]
-    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['Jenjang'] == selected_jenjang]
+
+    # Sinkronisasi diskon dengan filter TA, Jenjang, Kecamatan, & Kelurahan via data siswa terfilter
+    if not df_siswa.empty:
+        col_id_diskon = next((c for c in df_diskon.columns if c in ['No', 'Nomor', 'IdSiswa', 'ID Siswa', 'No Siswa']), None)
+        col_id_siswa = next((c for c in df_siswa.columns if c in ['No', 'Nomor', 'IdSiswa', 'ID Siswa', 'No Siswa']), None)
         
-    # Sinkronisasi dua arah via data siswa (Kecamatan, Kelurahan, TA, Jenjang)
-    key_col_diskon = next((c for c in ['No', 'ID Siswa', 'No Siswa', 'Nama Siswa', 'Nama'] if c in df_siswa.columns and c in df_diskon.columns), None)
-    if key_col_diskon:
-        if not df_siswa.empty:
-            valid_keys = set(df_siswa[key_col_diskon].dropna().unique())
-            df_diskon = df_diskon[df_diskon[key_col_diskon].isin(valid_keys)]
-        else:
-            df_diskon = df_diskon.iloc[0:0]
+        if col_id_diskon and col_id_siswa:
+            valid_siswa_ids = set(df_siswa[col_id_siswa].dropna())
+            df_diskon = df_diskon[df_diskon[col_id_diskon].isin(valid_siswa_ids)]
+        elif 'Nama Siswa' in df_diskon.columns and 'Nama' in df_siswa.columns:
+            valid_siswa_names = set(df_siswa['Nama'].dropna().astype(str).str.strip().str.upper())
+            df_diskon = df_diskon[df_diskon['Nama Siswa'].astype(str).str.strip().str.upper().isin(valid_siswa_names)]
 
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
-jenjang_info = f" | Jenjang: {selected_jenjang}" if selected_jenjang != "Semua Jenjang" else ""
+jj_info = f" | Jenjang: {selected_jenjang}" if selected_jenjang != "Semua Jenjang" else ""
 dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
 if selected_kel != "Semua Kelurahan":
     dom_info += f" ({selected_kel})"
 diskon_info = f" | {selected_nama_diskon}" if selected_nama_diskon != "Semua Jenis Diskon" else ""
 
-st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{jenjang_info}{dom_info}{diskon_info}")
+st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{jj_info}{dom_info}{diskon_info}")
 
 # ---------------------------------------------------------
 # TABS LAYOUT DASHBOARD
@@ -588,7 +597,7 @@ with tab3:
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
 
-# --- TAB 4: DISKON KHUSUS (TERPOSITIF TERSINKRONISASI TOTAL) ---
+# --- TAB 4: DISKON KHUSUS ---
 with tab4:
     if not df_diskon.empty:
         st.header("🏷️ Analisis Siswa Pendaftar Diskon Khusus")
@@ -613,7 +622,7 @@ with tab4:
             fig_diskon_bar = style_chart(px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon'))
             st.plotly_chart(fig_diskon_bar, use_container_width=True)
     else:
-        st.warning(f"Data Diskon Khusus tidak ditemukan untuk filter terpilih.")
+        st.warning(f"Data Diskon Khusus tidak ditemukan untuk kombinasi filter terpilih.")
 
 # --- TAB 5: PERBANDINGAN MULTI-TA ---
 with tab5:
@@ -625,10 +634,13 @@ with tab5:
         
         if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_siswa_filtered.columns:
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['lb_clean'] == selected_lb]
+            
         if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_siswa_filtered.columns:
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Jenjang'] == selected_jenjang]
+
         if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_siswa_filtered.columns:
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Kec Tinggal'] == selected_kec]
+            
         if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_siswa_filtered.columns:
             df_siswa_filtered = df_siswa_filtered[df_siswa_filtered['Kel Tinggal'] == selected_kel]
 
@@ -696,7 +708,7 @@ with tab5:
 # --- TAB 6: STATUS BAYAR DOMISILI ---
 with tab6:
     st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
-    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Jenjang Kelas, Kecamatan, dan Kelurahan yang aktif di atas.")
+    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Jenjang, Kecamatan, dan Kelurahan yang aktif di atas.")
 
     if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
         df_status = df_siswa.copy()
@@ -798,6 +810,7 @@ with tab7:
     st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
 
     if not df_siswa.empty:
+        # 1. OTOMATISASI HIGHLIGHT DATA
         st.subheader("📌 1. Smart Executive Summary (Otomatis)")
         
         tot_siswa = len(df_siswa)
@@ -814,7 +827,7 @@ with tab7:
         st.markdown("### 🔍 Temuan Kunci Sistem:")
         
         smart_bullets = []
-        smart_bullets.append(f"**Pertumbuhan & Volume:** Terdata **{tot_siswa} siswa** terdaftar pada filter aktif (**{ta_info}**, **{lb_info}**{jenjang_info}).")
+        smart_bullets.append(f"**Pertumbuhan & Volume:** Terdata **{tot_siswa} siswa** terdaftar pada filter aktif (**{ta_info}**, **{lb_info}**{jj_info}).")
         smart_bullets.append(f"**Kinerja Keuangan:** Dari total omset paket **Rp {tot_paket:,.0f}**, penerimaan tunai (Cash In) adalah **Rp {tot_bayar:,.0f} ({pct_pelunasan:.1f}%)**, menyisakan piutang sebesar **Rp {tot_tagihan:,.0f}**.".replace(',', '.'))
         
         if 'Jalur_Daftar' in df_siswa.columns:
@@ -837,6 +850,7 @@ with tab7:
 
         st.divider()
 
+        # 2. INTEGRASI GEMINI AI API
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
         system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -850,7 +864,7 @@ with tab7:
                 user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
         ctx_lines = [
-            f"Filter Terpilih: {ta_info}, {lb_info}{jenjang_info}, {dom_info}",
+            f"Filter Terpilih: {ta_info}, {lb_info}{jj_info}, {dom_info}",
             f"Total Siswa: {tot_siswa} Siswa",
             f"Total Nilai Paket Bimbingan: Rp {tot_paket:,.0f}",
             f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
@@ -890,6 +904,7 @@ Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresenta
 
         st.divider()
 
+        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF
         st.subheader("💬 3. Tanya AI Seputar Data Dashboard (Interactive Q&A)")
         
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
