@@ -309,14 +309,22 @@ if not df_diskon_raw.empty:
     col_besar_d = next((c for c in df_diskon_raw.columns if 'besar' in str(c).lower() or 'nominal' in str(c).lower()), 'Besar Diskon')
 
     for _, row in df_diskon_raw.iterrows():
+        # Konversi nominal diskon dengan aman
+        raw_val = row.get(col_besar_d)
+        try:
+            val_diskon = float(pd.to_numeric(raw_val, errors='coerce'))
+            val_diskon = 0.0 if pd.isna(val_diskon) else val_diskon
+        except:
+            val_diskon = 0.0
+
         list_diskon_records.append({
             'Nomor Formulir': clean_str(row.get(col_form_d)),
             'Kwitansi': clean_str(row.get(col_kwt_d)),
             'Nama Diskon': str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus',
-            'Besar Diskon': float(row.get(col_besar_d)) if pd.notna(row.get(col_besar_d)) and str(row.get(col_besar_d)).replace('.','',1).isdigit() else 0.0,
+            'Besar Diskon': val_diskon,
             'Sumber': 'File Diskon'
         })
-
+        
 # 2. Dari File Data Siswa (20260828_data_siswanf_2627.xlsx) pada Kolom Catatan
 if not df_siswa_raw.empty:
     col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
@@ -696,15 +704,22 @@ with tab4:
     if not df_diskon.empty:
         col1, col2, col3, col4 = st.columns(4)
         
-        tot_diskon_nominal = df_diskon['Besar Diskon'].sum() if 'Besar Diskon' in df_diskon.columns else 0
-        avg_diskon_nominal = df_diskon[df_diskon['Besar Diskon'] > 0]['Besar Diskon'].mean() if 'Besar Diskon' in df_diskon.columns else 0
+        # Perhitungan nominal dengan penanganan NaN
+        tot_diskon_nominal = df_diskon['Besar Diskon'].fillna(0).sum() if 'Besar Diskon' in df_diskon.columns else 0
+        
+        # Filter hanya diskon dengan nominal > 0 untuk hitung rata-rata
+        df_valid_diskon = df_diskon[df_diskon['Besar Diskon'] > 0] if 'Besar Diskon' in df_diskon.columns else pd.DataFrame()
+        avg_diskon_nominal = df_valid_diskon['Besar Diskon'].mean() if not df_valid_diskon.empty else 0.0
+        if pd.isna(avg_diskon_nominal):
+            avg_diskon_nominal = 0.0
+
         cnt_diskon_jenis = df_diskon['Nama Diskon'].nunique() if 'Nama Diskon' in df_diskon.columns else 0
 
         col1.metric("Penerima Diskon Terfilter", f"{len(df_diskon)} Siswa")
         col2.metric("Total Nominal Diskon", f"Rp {tot_diskon_nominal:,.0f}".replace(',', '.'))
         col3.metric("Rata-rata Diskon (Kupon)", f"Rp {avg_diskon_nominal:,.0f}".replace(',', '.'))
         col4.metric("Kategori Diskon", f"{cnt_diskon_jenis} Jenis")
-
+        
         st.divider()
 
         c1, c2 = st.columns(2)
