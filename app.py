@@ -98,20 +98,22 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
-# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan
+# REVISI LOGIKA: Penyatuan Kategori Diskon Juara / PSJ
 def extract_diskon_juara_from_catatan(catatan_val):
     if pd.isna(catatan_val):
         return None
     cat_str = str(catatan_val).strip().upper()
     
-    if 'LUNAS JUARA' in cat_str or 'LUNASJUARA' in cat_str:
-        return 'Lunas Juara'
-    elif 'DISKON JUARA' in cat_str or 'DISKONJUARA' in cat_str:
-        return 'Diskon Juara'
-    elif 'JUARA' in cat_str:
-        return 'Diskon Juara'
-    elif 'PSJ' in cat_str:
-        return 'Diskon PSJ'
+    # 1. Pisahkan jika ada keterangan Formulir + Angsuran / Diangsur
+    if ('FORMULIR' in cat_str or 'FORM' in cat_str) and ('ANGSURAN' in cat_str or 'ANGSUR' in cat_str or 'ANGS' in cat_str):
+        return 'Juara (Formulir + Angsuran 1)'
+    elif 'ANGSURAN 1' in cat_str or 'ANGSURAN1' in cat_str or 'ANGS 1' in cat_str:
+        return 'Juara (Formulir + Angsuran 1)'
+        
+    # 2. Satukan Diskon Juara, PSJ, Lunas Juara, dll. menjadi satu kategori
+    elif any(kw in cat_str for kw in ['JUARA', 'PSJ', 'LUNAS JUARA', 'DISKON JUARA']):
+        return 'Diskon Juara / PSJ'
+        
     return None
 
 # ---------------------------------------------------------
@@ -297,7 +299,7 @@ if not df_siswa_raw.empty:
             df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
 # ---------------------------------------------------------
-# EKSTRAKSI & INTEGRASI DATA DISKON BESERTA DISKON DARIPADA KOLOM CATATAN
+# EKSTRAKSI & INTEGRASI DATA DISKON BESERTA CATATAN JUARA
 # ---------------------------------------------------------
 list_diskon_records = []
 
@@ -309,7 +311,6 @@ if not df_diskon_raw.empty:
     col_besar_d = next((c for c in df_diskon_raw.columns if 'besar' in str(c).lower() or 'nominal' in str(c).lower()), 'Besar Diskon')
 
     for _, row in df_diskon_raw.iterrows():
-        # Konversi nominal diskon dengan aman
         raw_val = row.get(col_besar_d)
         try:
             val_diskon = float(pd.to_numeric(raw_val, errors='coerce'))
@@ -317,14 +318,19 @@ if not df_diskon_raw.empty:
         except:
             val_diskon = 0.0
 
+        raw_nama = str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus'
+        
+        # Normalkan nama diskon jika ada kata Juara / PSJ di file diskon
+        nama_diskon_clean = extract_diskon_juara_from_catatan(raw_nama) or raw_nama
+
         list_diskon_records.append({
             'Nomor Formulir': clean_str(row.get(col_form_d)),
             'Kwitansi': clean_str(row.get(col_kwt_d)),
-            'Nama Diskon': str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus',
+            'Nama Diskon': nama_diskon_clean,
             'Besar Diskon': val_diskon,
             'Sumber': 'File Diskon'
         })
-        
+
 # 2. Dari File Data Siswa (20260828_data_siswanf_2627.xlsx) pada Kolom Catatan
 if not df_siswa_raw.empty:
     col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
@@ -365,14 +371,11 @@ if not df_trx_raw.empty:
 df_diskon_combined = pd.DataFrame(list_diskon_records)
 
 if not df_diskon_combined.empty:
-    # Hapus duplikat pencatatan jika ada kombinasi Formulir + Kwitansi + Nama Diskon yang persis sama
     df_diskon_combined = df_diskon_combined.drop_duplicates(subset=['Nomor Formulir', 'Kwitansi', 'Nama Diskon'])
     
     # Hubungkan metadata dari Data Siswa & Transaksi
     if not df_siswa_raw.empty:
         col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
-        col_kwt_s = next((c for c in df_siswa_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
-        
         df_siswa_meta = df_siswa_raw.copy()
         df_siswa_meta['f_clean'] = df_siswa_meta[col_form_s].apply(clean_str) if col_form_s in df_siswa_meta.columns else None
         
@@ -399,7 +402,7 @@ if not df_diskon_combined.empty:
                     df_diskon_combined[col] = df_diskon_combined[col].fillna(df_diskon_combined['Nomor Formulir'].map(map_trx_f[col]))
                 else:
                     df_diskon_combined[col] = df_diskon_combined['Nomor Formulir'].map(map_trx_f[col])
-                    
+
 df_diskon_raw = df_diskon_combined.copy()
 
 # ---------------------------------------------------------
@@ -696,18 +699,15 @@ with tab3:
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
 
-# --- TAB 4: DISKON KHUSUS (TERMASUK DATAPAKET JUARA/PSJ DARI CATATAN) ---
+# --- TAB 4: DISKON KHUSUS ---
 with tab4:
     st.header("🏷️ Analisis Siswa Pendaftar Diskon Khusus & Program Juara/PSJ")
-    st.info("💡 **Tersinkronisasi:** Menampilkan gabungan data diskon khusus serta pendaftar program PSJ/Juara/Diskon Juara dari kolom Catatan Data Siswa & Transaksi.")
+    st.info("💡 **Tersinkronisasi:** Menampilkan gabungan data diskon khusus serta pendaftar program Diskon Juara / PSJ dari file diskon dan catatan.")
 
     if not df_diskon.empty:
         col1, col2, col3, col4 = st.columns(4)
         
-        # Perhitungan nominal dengan penanganan NaN
         tot_diskon_nominal = df_diskon['Besar Diskon'].fillna(0).sum() if 'Besar Diskon' in df_diskon.columns else 0
-        
-        # Filter hanya diskon dengan nominal > 0 untuk hitung rata-rata
         df_valid_diskon = df_diskon[df_diskon['Besar Diskon'] > 0] if 'Besar Diskon' in df_diskon.columns else pd.DataFrame()
         avg_diskon_nominal = df_valid_diskon['Besar Diskon'].mean() if not df_valid_diskon.empty else 0.0
         if pd.isna(avg_diskon_nominal):
@@ -719,12 +719,12 @@ with tab4:
         col2.metric("Total Nominal Diskon", f"Rp {tot_diskon_nominal:,.0f}".replace(',', '.'))
         col3.metric("Rata-rata Diskon (Kupon)", f"Rp {avg_diskon_nominal:,.0f}".replace(',', '.'))
         col4.metric("Kategori Diskon", f"{cnt_diskon_jenis} Jenis")
-        
+
         st.divider()
 
         c1, c2 = st.columns(2)
         with c1:
-            st.subheader("Distribusi Jenis Diskon Terpakai (Termasuk PSJ/Juara)")
+            st.subheader("Distribusi Jenis Diskon Terpakai")
             if 'Nama Diskon' in df_diskon.columns:
                 diskon_type = df_diskon['Nama Diskon'].value_counts().reset_index()
                 diskon_type.columns = ['Nama Diskon', 'Jumlah Siswa']
@@ -736,7 +736,6 @@ with tab4:
                     hole=0.4
                 ))
                 
-                # Tampilkan Angka Siswa & Persentase
                 fig_diskon_pie.update_traces(
                     textinfo='value+percent',
                     texttemplate='%{value} siswa<br>(%{percent})'
