@@ -168,7 +168,7 @@ def ask_gemini_ai(api_key, prompt_text):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     try:
@@ -204,7 +204,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf" and input_pass == "nfms2026":
+                if input_user == "staf612120" and input_pass == "nfms2026%":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
