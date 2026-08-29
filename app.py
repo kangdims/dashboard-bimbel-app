@@ -123,7 +123,7 @@ def ask_gemini_ai(api_key, prompt_text):
         return "⚠️ **API Key tidak boleh kosong.**"
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
