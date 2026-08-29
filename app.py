@@ -5,6 +5,7 @@ import glob
 import json
 import urllib.request
 import urllib.error
+from datetime import datetime
 
 # ---------------------------------------------------------
 # KONFIGURASI HALAMAN WEB & THEME
@@ -123,7 +124,7 @@ def ask_gemini_ai(api_key, prompt_text):
         return "⚠️ **API Key tidak boleh kosong.**"
         
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
@@ -1035,9 +1036,13 @@ with tab6:
 # --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY ---
 with tab7:
     st.header("🤖 Executive AI Analytics & Smart Insights Assistant")
-    st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif, Temuan Kunci, & Rekomendasi Strategis secara otomatis maupun melalui integrasi Google Gemini AI.")
+    st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif dengan struktur Memorandum Resmi & Pendekatan 4 Analisis Data (Deskriptif, Diagnostik, Prediktif, & Preskriptif).")
 
     if not df_siswa.empty:
+        # Dinamiskan Pengirim berdasarkan Filter Lokasi Belajar
+        sender_cabang = f"Tim Cabang {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Tim Gabungan Cabang (Wilayah Megapolitan Selatan)"
+        current_date_str = datetime.now().strftime("%d %B %Y")
+
         st.subheader("📌 1. Smart Executive Summary (Otomatis)")
         
         tot_siswa = len(df_siswa)
@@ -1077,6 +1082,7 @@ with tab7:
 
         st.divider()
 
+        # 2. GENERATIVE AI EXECUTIVE REPORT (REVISI STRUKTUR LENGKAP)
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
         system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -1091,11 +1097,11 @@ with tab7:
 
         ctx_lines = [
             f"Filter Terpilih: {ta_info}, {lb_info}, {jj_info}, {dom_info}",
-            f"Total Siswa: {tot_siswa} Siswa",
-            f"Total Nilai Paket Bimbingan: Rp {tot_paket:,.0f}",
+            f"Total Siswa Terdaftar: {tot_siswa} Siswa",
+            f"Total Target Paket Bimbingan: Rp {tot_paket:,.0f}",
             f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
             f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
-            f"Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
+            f"Total Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
         ]
         if 'Jalur_Daftar' in df_siswa.columns:
             jalur_str = ', '.join([f'{k}: {v}' for k,v in df_siswa['Jalur_Daftar'].value_counts().items()])
@@ -1113,16 +1119,33 @@ with tab7:
             if not user_gemini_key:
                 st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
             else:
-                with st.spinner("🤖 Gemini AI sedang menganalisis data keuangan, demografi, & rasio pelunasan..."):
-                    prompt_narrative = f"""Anda adalah seorang Management Consultant & Chief Data Officer senior untuk lembaga bimbingan belajar.
+                with st.spinner("🤖 Gemini AI sedang menyusun Laporan Memorandum Eksekutif..."):
+                    prompt_narrative = f"""Anda adalah Management Consultant & Chief Data Officer Senior untuk lembaga Bimbingan Belajar.
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
 
-Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresentasikan kepada direksi:
-1. Executive Summary & Evaluasi Kinerja
-2. Analisis Risiko & Piutang Tagihan
-3. Peluang Ekspansi & Marketing
-4. 3 Langkah Strategis Prioritas (Actionable Steps)"""
+Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesional berikut:
+
+**MEMORANDUM EKSEKUTIF**
+
+**Kepada:** Manajer Wilayah Megapolitan Selatan
+**Dari:** {sender_cabang}
+**Tanggal:** {current_date_str}
+**Subjek:** Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
+
+---
+
+### 1. ANALISIS DESKRIPTIF (What Happened)
+(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, dan rasio pelunasan berdasarkan data riil saat ini).
+
+### 2. ANALISIS DIAGNOSTIK (Why It Happened)
+(Analisis akar masalah & pemicu internal/eksternal. Mengapa rasio pelunasan mencapai angka tersebut? Mengapa terjadi konsentrasi siswa pada sekolah/domisili tertentu?).
+
+### 3. ANALISIS PREDIKTIF (What Will Happen)
+(Berikan proyeksi tren ke depan. Bagaimana risiko keterlambatan pelunasan piutang jika tidak di-follow-up? Bagaimana potensi pertumbuhan pendaftar pada periode berikutnya?).
+
+### 4. ANALISIS PRESKRIPTIF (What Should We Do)
+(Rekomendasikan 3 s/d 4 langkah strategis taktis & konkrrit yang HARUS dilakukan oleh Tim Cabang & Manajemen Wilayah untuk meningkatkan pelunasan kas dan penetrasi pasar)."""
                     
                     ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
                     st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
@@ -1130,6 +1153,7 @@ Tuliskan laporan analisis eksekutif yang tajam, profesional, dan siap dipresenta
 
         st.divider()
 
+        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF
         st.subheader("💬 3. Tanya AI Seputar Data Dashboard (Interactive Q&A)")
         
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
