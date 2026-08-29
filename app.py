@@ -70,14 +70,13 @@ st.markdown("""
 # HELPER GENERATOR PDF (FPDF / REPORTLAB FALLBACK)
 # ---------------------------------------------------------
 def create_pdf_report(report_text, filename_title):
-    """Fungsi pembentuk dokumen PDF laporan eksekutif dengan header resmi Nurul Fikri"""
     try:
         from fpdf import FPDF
         
         class NF_PDF_Engine(FPDF):
             def header(self):
                 self.set_font('Arial', 'B', 12)
-                self.set_text_color(0, 82, 156) # NF Blue
+                self.set_text_color(0, 82, 156)
                 self.cell(0, 6, 'BIMBINGAN DAN KONSULTASI BELAJAR NURUL FIKRI', 0, 1, 'C')
                 self.set_font('Arial', 'I', 8)
                 self.set_text_color(100, 100, 100)
@@ -115,8 +114,7 @@ def create_pdf_report(report_text, filename_title):
                 pdf.multi_cell(0, 5, txt)
 
         return bytes(pdf.output())
-    except Exception as e:
-        # Fallback generator sederhana jika library fpdf tidak tersedia
+    except Exception:
         output_buffer = io.BytesIO()
         output_buffer.write(report_text.encode('utf-8'))
         return output_buffer.getvalue()
@@ -170,7 +168,7 @@ def ask_gemini_ai(api_key, prompt_text):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     try:
@@ -206,7 +204,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf612120" and input_pass == "nfms2026%":
+                if input_user == "staf" and input_pass == "nfms2026":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
@@ -257,7 +255,12 @@ def load_combined_data(uploaded_files, filename_keywords):
     all_excel_files = glob.glob("*.xlsx")
     matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords)]
     if matched_files:
-        dfs = [pd.read_excel(mf) for mf in matched_files if pd.read_excel(mf) is not None]
+        dfs = []
+        for mf in matched_files:
+            try:
+                dfs.append(pd.read_excel(mf))
+            except Exception:
+                pass
         if dfs: return pd.concat(dfs, ignore_index=True)
     return pd.DataFrame()
 
@@ -377,11 +380,13 @@ with tab2:
         c1, c2 = st.columns(2)
         with c1:
             kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
-            st.plotly_chart(style_chart(px.bar(kat_siswa_df, x='index', y='Kategori_Siswa', color='index')), use_container_width=True)
+            kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
+            st.plotly_chart(style_chart(px.bar(kat_siswa_df, x='Status Siswa', y='Jumlah', color='Status Siswa')), use_container_width=True)
             st.caption("📝 **Penjelasan Diagram:** Komposisi pendaftar Baru vs Lama.")
         with c2:
             df_jalur = df_siswa['Jalur_Daftar'].value_counts().reset_index()
-            st.plotly_chart(style_chart(px.pie(df_jalur, names='index', values='Jalur_Daftar', hole=0.4)), use_container_width=True)
+            df_jalur.columns = ['Jalur Pendaftaran', 'Jumlah Siswa']
+            st.plotly_chart(style_chart(px.pie(df_jalur, names='Jalur Pendaftaran', values='Jumlah Siswa', hole=0.4)), use_container_width=True)
             st.caption("📝 **Penjelasan Diagram:** Pendaftaran Online vs Offline.")
     else: st.warning("Data Siswa tidak ditemukan.")
 
@@ -389,7 +394,10 @@ with tab3:
     if not df_siswa.empty:
         st.write("### Top Asal Sekolah & Domisili")
         top_sekolah = df_siswa['Asal Sekolah'].value_counts().head(10).reset_index()
-        st.plotly_chart(style_chart(px.bar(top_sekolah, y='index', x='Asal Sekolah', orientation='h')), use_container_width=True)
+        top_sekolah.columns = ['Asal Sekolah', 'Jumlah Siswa']
+        fig_sekolah = style_chart(px.bar(top_sekolah, y='Asal Sekolah', x='Jumlah Siswa', orientation='h', text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis'))
+        fig_sekolah.update_layout(yaxis={'categoryorder':'total ascending'})
+        st.plotly_chart(fig_sekolah, use_container_width=True)
         st.caption("📝 **Penjelasan Bagan:** 10 Sekolah penyumbang pendaftar terbanyak.")
     else: st.warning("Data Sekolah/Domisili tidak ditemukan.")
 
@@ -397,7 +405,8 @@ with tab4:
     if not df_diskon.empty:
         st.write("### Summary Diskon Khusus & PSJ")
         diskon_type = df_diskon['Nama Diskon'].value_counts().reset_index()
-        st.plotly_chart(style_chart(px.pie(diskon_type, names='index', values='Nama Diskon', hole=0.4)), use_container_width=True)
+        diskon_type.columns = ['Nama Diskon', 'Jumlah Siswa']
+        st.plotly_chart(style_chart(px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4)), use_container_width=True)
         st.caption("📝 **Penjelasan Diagram:** Proporsi jenis promo/diskon terpakai.")
     else: st.warning("Data Diskon tidak ditemukan.")
 
@@ -409,10 +418,10 @@ with tab6:
     st.write("### Status Bayar per Domisili")
     st.caption("Rincian Lunas vs Angsuran per wilayah.")
 
-# --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY (DENGAN STRATEGI PROMO & PDF) ---
+# --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY ---
 with tab7:
     st.header("🤖 Executive AI Analytics & Smart Insights Assistant")
-    st.info("💡 **Memorandum Eksekutif AI:** Menggabungkan analisis kuantitatif dengan masukan strategi operasional cabang (Promo TryOut/MBTI, KDL/KDN Gratis, & Fitur Unggulan Flyer NF)[cite: 1, 3].")
+    st.info("💡 **Memorandum Eksekutif AI:** Menggabungkan analisis kuantitatif dengan masukan strategi operasional cabang (Promo TryOut/MBTI, KDL/KDN Gratis, & Fitur Unggulan Flyer NF).")
 
     if not df_siswa.empty:
         sender_cabang = f"Tim Cabang {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Tim Gabungan Cabang (Wilayah Megapolitan Selatan)"
@@ -426,17 +435,16 @@ with tab7:
 
         st.subheader("📌 1. Operational & Marketing Inputs (Terintegrasi ke AI)")
         
-        # Display operational strategy cards
         op_col1, op_col2, op_col3 = st.columns(3)
         with op_col1:
             st.markdown("🎯 **Entry Point Promo Sekolah:**")
-            st.caption("Tim Cabang aktif terlibat agenda promo sekolah membawa Try Out (TO) atau Asesmen Akademik/MBTI sebagai pembuka jalan[cite: 1].")
+            st.caption("Tim Cabang aktif terlibat agenda promo sekolah membawa Try Out (TO) atau Asesmen Akademik/MBTI sebagai pembuka jalan.")
         with op_col2:
             st.markdown("🚀 **Perekrutan Massal (START NF):**")
             st.caption("Pelaksanaan Tes Kemampuan Dasar Literasi (KDL) & Numerasi (KDN) GRATIS untuk memperluas corong perekrutan.")
         with op_col3:
             st.markdown("💎 **Value Proposition Flyer:**")
-            st.caption("100% Pengajar PTN, Full Tatap Muka, Zuper Book & Digital, 24/7 SIP-NF & NF Juara, Chat Konsul, ANDARA & MBPJ[cite: 3].")
+            st.caption("100% Pengajar PTN, Full Tatap Muka, Zuper Book & Digital, 24/7 SIP-NF & NF Juara, Chat Konsul, ANDARA & MBPJ.")
 
         st.divider()
 
@@ -450,7 +458,6 @@ with tab7:
             with st.expander("🔑 Pengaturan API Key Google Gemini", expanded=True):
                 user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
-        # Context Payload for Gemini
         ctx_lines = [
             f"Filter Terpilih: {ta_info}, {lb_info}, {jj_info}, {dom_info}",
             f"Total Siswa Terdaftar: {tot_siswa} Siswa",
@@ -458,9 +465,9 @@ with tab7:
             f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
             f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
             f"Total Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}",
-            "Strategi Promo Cabang: Kunjungan sekolah dengan TO/Asesmen MBTI sebagai entry point[cite: 1].",
+            "Strategi Promo Cabang: Kunjungan sekolah dengan TO/Asesmen MBTI sebagai entry point.",
             "Program Funneling: Tes Kemampuan Dasar Literasi (KDL) & Numerasi (KDN) / START NF GRATIS.",
-            "Fasilitas & Fitur Flyer: 100% Pengajar PTN, Full Tatap Muka, Modul Zuper Book & Digital, SIP-NF & NF Juara, Konsultasi Chat Gratis, ANDARA & MBPJ[cite: 3]."
+            "Fasilitas & Fitur Flyer: 100% Pengajar PTN, Full Tatap Muka, Modul Zuper Book & Digital, SIP-NF & NF Juara, Konsultasi Chat Gratis, ANDARA & MBPJ."
         ]
         data_context = "\n- ".join([""] + ctx_lines)
 
@@ -485,10 +492,10 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 ---
 
 ### 1. ANALISIS DESKRIPTIF (What Happened)
-(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, rasio pelunasan, serta partisipasi siswa dalam event Tes KDL/KDN gratis & TryOut sekolah[cite: 1]).
+(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, rasio pelunasan, serta partisipasi siswa dalam event Tes KDL/KDN gratis & TryOut sekolah).
 
 ### 2. ANALISIS DIAGNOSTIK (Why It Happened)
-(Analisis akar masalah & pemicu internal/eksternal. Mengapa rasio pelunasan mencapai angka tersebut? Seberapa efektif eksekusi tim cabang pada agenda promo sekolah dengan TO/MBTI serta konversi fitur unggulan flyer NF[cite: 1, 3]?).
+(Analisis akar masalah & pemicu internal/eksternal. Mengapa rasio pelunasan mencapai angka tersebut? Seberapa efektif eksekusi tim cabang pada agenda promo sekolah dengan TO/MBTI serta konversi fitur unggulan flyer NF?).
 
 ### 3. ANALISIS PREDIKTIF (What Will Happen)
 (Proyeksi tren ke depan. Bagaimana risiko keterlambatan pelunasan piutang? Bagaimana potensi akuisisi peserta Tes KDL/KDN gratis untuk dikonversi menjadi siswa berbayar di periode berikutnya?).
@@ -499,7 +506,6 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     ai_response = ask_gemini_ai(user_gemini_key, prompt_narrative)
                     st.session_state['latest_ai_report'] = ai_response
 
-        # JIKA LAPORAN SUDAH DI-GENERATE, TAMPILKAN DAN SEDIAKAN TOMBOL DOWNLOAD PDF
         if 'latest_ai_report' in st.session_state and st.session_state['latest_ai_report']:
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             report_text = st.session_state['latest_ai_report']
@@ -507,7 +513,6 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 
             st.divider()
 
-            # ELEMEN UNDUH LAPORAN BERGAYA EXCLUSIVE NURUL FIKRI
             pdf_bytes = create_pdf_report(report_text, f"Laporan_Eksekutif_NF_{selected_lb}")
             
             st.download_button(
