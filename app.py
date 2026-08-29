@@ -98,7 +98,7 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
-# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan (LOGIKA DIPERKETAT)
+# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan
 def extract_diskon_juara_from_catatan(catatan_val):
     if pd.isna(catatan_val):
         return None
@@ -168,7 +168,7 @@ with col_head2:
             input_user = st.text_input("Username", key="login_user")
             input_pass = st.text_input("Password", type="password", key="login_pass")
             if st.button("Login", use_container_width=True):
-                if input_user == "staf612120" and input_pass == "nfms2026%":
+                if input_user == "staf" and input_pass == "nfms2026":
                     st.session_state.admin_logged_in = True
                     st.success("Login Berhasil!")
                     st.rerun()
@@ -518,6 +518,7 @@ with tab1:
             daily_trx = df_trx.groupby('Tanggal')['Jumlah'].sum().reset_index()
             fig_line = style_chart(px.line(daily_trx, x='Tanggal', y='Jumlah', markers=True))
             st.plotly_chart(fig_line, use_container_width=True)
+            st.caption("📝 **Penjelasan Grafik:** Grafik garis di atas menggambarkan fluktuasi nominal pendapatan harian. Titik puncak menandakan tanggal dengan volume transaksi keuangan tertinggi pada periode terfilter.")
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
@@ -533,6 +534,7 @@ with tab1:
                 texttemplate='%{value} siswa<br>(%{percent})'
             )
             st.plotly_chart(fig_pie, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram:** Diagram donat di atas memperlihatkan persentase dan frekuensi penggunaan jenis metode pembayaran (Cash, Transfer, Debit, Virtual Account) yang digunakan oleh wali siswa.")
 
         st.divider()
 
@@ -545,6 +547,7 @@ with tab1:
                 color='Status Siswa'
             ))
             st.plotly_chart(fig_kat_trx, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa (Siswa Baru Rp300k, Siswa Lama Rp50k, atau NFIC Rp200k).")
 
     else:
         st.warning(f"Data Transaksi tidak ditemukan untuk filter terpilih.")
@@ -571,6 +574,7 @@ with tab2:
                     color='Status Siswa'
                 ))
                 st.plotly_chart(fig_kat_siswa, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram:** Menunjukkan komposisi kuantitas pendaftar terfilter berdasarkan kategori pendaftar (Baru vs Re-enrollment/Lama).")
 
         with c2:
             st.subheader("Distribusi Jenjang Kelas")
@@ -578,6 +582,7 @@ with tab2:
             jenjang_df.columns = ['Jenjang', 'Jumlah']
             fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram:** Menggambarkan tingkat kepadatan jumlah siswa aktif pada masing-masing tingkatan kelas (SD, SMP, SMA, & RONIN).")
 
         with c3:
             st.subheader("Proporsi Pendaftaran Online vs Offline")
@@ -603,6 +608,7 @@ with tab2:
                 )
                 
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online dibandingkan pendaftaran manual langsung di Cabang/WA.")
             else:
                 st.warning("Kolom 'Cara Daftar' tidak ditemukan pada file Data Siswa.")
 
@@ -624,6 +630,7 @@ with tab3:
             ))
             fig_sekolah.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_sekolah, use_container_width=True)
+            st.caption("📝 **Penjelasan Bagan Horisontal:** Peringkat 10 sekolah penyumbang pendaftar terbanyak. Menjadi prioritas utama dalam kegiatan sosialisasi & pameran pendidikan.")
 
         with c2:
             st.write("📊 **Detail Sebaran Sekolah & Lokasi Belajar**")
@@ -631,6 +638,7 @@ with tab3:
             sekolah_lb.columns = ['Asal Sekolah', 'Lokasi Belajar', 'Jumlah Siswa']
             sekolah_lb = sekolah_lb.sort_values(by='Jumlah Siswa', ascending=False)
             st.dataframe(sekolah_lb, use_container_width=True, height=350)
+            st.caption("📝 **Penjelasan Tabel:** Rincian kuantitatif distribusi pendaftar asal sekolah tertentu ke cabang/lokasi belajar yang dipilih.")
 
         st.divider()
 
@@ -652,6 +660,7 @@ with tab3:
             ))
             fig_jenjang_kec.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kec, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram Grouped Bar:** Menampilkan persebaran jenjang pendidikan siswa di setiap wilayah Kecamatan domisili beserta kontribusi persentasenya.")
 
         st.divider()
 
@@ -673,6 +682,7 @@ with tab3:
             ))
             fig_jenjang_kel.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kel, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram:** Pemetaan tingkat kelurahan secara mendalam untuk mengidentifikasi area pemukiman yang paling potensial untuk penetrasi pasar.")
 
     else:
         st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
@@ -720,6 +730,7 @@ with tab4:
                 )
                 
                 st.plotly_chart(fig_diskon_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan proporsi penggunaan jenis promo/diskon (seperti Diskon Juara/PSJ, Anak Guru, Saudara Kandung) yang diklaim pendaftar.")
 
         with c2:
             st.subheader("Total Nominal Diskon per Lokasi Belajar")
@@ -728,21 +739,22 @@ with tab4:
                 diskon_lokasi.columns = ['Lokasi Belajar', 'Besar Diskon']
                 fig_diskon_bar = style_chart(px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon'))
                 st.plotly_chart(fig_diskon_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total pengeluaran beban potongan harga (diskon kupon) yang diberikan pada masing-masing cabang.")
 
         st.divider()
 
         st.subheader("Detail Data Siswa Penerima Diskon & Program Juara (Terfilter)")
         disp_cols = [c for c in ['Nomor Formulir', 'Kwitansi', 'Nama Diskon', 'Besar Diskon', 'Sumber', 'lb_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal'] if c in df_diskon.columns]
         st.dataframe(df_diskon[disp_cols], use_container_width=True)
+        st.caption("📝 **Penjelasan Tabel:** Rincian baris data siswa yang berhak menerima potongan harga beserta nilai nominal dan sumber pencatatannya.")
     else:
         st.warning(f"Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
 
-# --- TAB 5: PERBANDINGAN MULTI-TA (9 METRIK LENGKAP BERSAMA KINERJA TREN) ---
+# --- TAB 5: PERBANDINGAN MULTI-TA ---
 with tab5:
     st.header("📈 Analisis & Komparasi Tren Multi-Tahun Ajaran (Multi-TA)")
     st.info("💡 **Tersinkronisasi:** Seluruh grafik di bawah ini membandingkan tren performa antar Tahun Ajaran berdasarkan Lokasi, Jenjang, dan Domisili terfilter.")
 
-    # Siapkan DataFrame Filtered tanpa batasan Tahun Ajaran (agar bisa membandingkan TA)
     df_s_comp = df_siswa_raw.copy()
     if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_s_comp.columns:
         df_s_comp = df_s_comp[df_s_comp['lb_clean'] == selected_lb]
@@ -761,16 +773,13 @@ with tab5:
 
     if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
         
-        # Helper Kalkulasi Delta (%)
         def calculate_delta_df(df_grouped, col_cat, col_val='Jumlah'):
             df_pivot = df_grouped.pivot(index='ta_clean', columns=col_cat, values=col_val).fillna(0)
             df_diff = df_pivot.diff().fillna(0)
             df_pct = (df_pivot.pct_change() * 100).fillna(0).round(1)
             return df_pivot, df_diff, df_pct
 
-        # ---------------------------------------------------------
         # 1. Jumlah Siswa Lama / Baru
-        # ---------------------------------------------------------
         st.subheader("1. Jumlah Siswa Lama vs Baru per TA")
         if 'Kategori_Siswa' in df_s_comp.columns:
             g1 = df_s_comp.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah')
@@ -778,20 +787,20 @@ with tab5:
             with c1:
                 fig1_bar = style_chart(px.bar(g1, x='ta_clean', y='Jumlah', color='Kategori_Siswa', barmode='group', text_auto=True, title="Diagram Batang Kategori Siswa"))
                 st.plotly_chart(fig1_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan perbandingan jumlah riil siswa lama vs baru yang terdaftar di tiap Tahun Ajaran.")
             with c2:
                 fig1_pie = style_chart(px.pie(g1, names='Kategori_Siswa', values='Jumlah', color='ta_clean', hole=0.4, title="Proporsi Akumulasi Status Siswa"))
                 fig1_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig1_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan rasio akumulasi pendaftar baru dibandingkan re-enrollment secara keseluruhan.")
             
             piv1, diff1, pct1 = calculate_delta_df(g1, 'Kategori_Siswa')
-            st.caption("📈 **Perubahan Angka & Persentase (YoY):**")
+            st.caption("📈 **Tabel Rekapitulasi Perubahan YoY:**")
             st.dataframe(piv1.style.highlight_max(axis=0), use_container_width=True)
 
         st.divider()
 
-        # ---------------------------------------------------------
-        # 2. Komparasi Paket Bimbingan vs Cash In per TA
-        # ---------------------------------------------------------
+        # 2. Komparasi Paket Bimbingan vs Cash In
         st.subheader("2. Komparasi Paket Bimbingan vs Realisasi Cash In per TA")
         g2 = df_s_comp.groupby('ta_clean').agg(
             Nilai_Paket=('Biaya Paket', 'sum'),
@@ -805,16 +814,16 @@ with tab5:
         with c1:
             fig2_bar = style_chart(px.bar(g2_melt, x='ta_clean', y='Nominal', color='Kategori', barmode='group', text_auto='.3s', title="Perbandingan Nilai Paket vs Cash In"))
             st.plotly_chart(fig2_bar, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram Batang:** Membandingkan nilai omset bruto paket bimbingan dengan realisasi dana tunai (cash-in) yang diterima dari TA ke TA.")
         with c2:
             fig2_pie = style_chart(px.pie(g2_melt, names='Kategori', values='Nominal', hole=0.4, title="Proporsi Realisasi Bimbingan vs Cash In"))
             fig2_pie.update_traces(textinfo='value+percent')
             st.plotly_chart(fig2_pie, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram Donat:** Menunjukkan rasio tingkat efektivitas penagihan tunai terhadap target nilai paket.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 3. Tren Pendapatan Harian
-        # ---------------------------------------------------------
         st.subheader("3. Tren Pendapatan Harian Antar TA")
         if not df_t_comp.empty and 'Tanggal' in df_t_comp.columns:
             df_t_comp['Tanggal'] = pd.to_datetime(df_t_comp['Tanggal'])
@@ -823,12 +832,11 @@ with tab5:
 
             fig3_line = style_chart(px.line(g3, x='Bulan_Tgl', y='Jumlah', color='ta_clean', markers=True, title="Grafik Tren Pendapatan Harian (Disetarakan Tanggal & Bulan)"))
             st.plotly_chart(fig3_line, use_container_width=True)
+            st.caption("📝 **Penjelasan Grafik Garis Multi-Garis:** Menyejajarkan pola pemasukan harian harian antar TA pada kalender tanggal yang sama untuk menganalisis puncak periode penerimaan kas.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 4. Proporsi Metode Pembayaran
-        # ---------------------------------------------------------
         st.subheader("4. Proporsi & Distribusi Metode Pembayaran per TA")
         if not df_t_comp.empty and 'Type Bayar' in df_t_comp.columns:
             g4 = df_t_comp.groupby(['ta_clean', 'Type Bayar']).size().reset_index(name='Jumlah')
@@ -836,16 +844,16 @@ with tab5:
             with c1:
                 fig4_bar = style_chart(px.bar(g4, x='ta_clean', y='Jumlah', color='Type Bayar', barmode='group', text_auto=True, title="Diagram Batang Metode Pembayaran"))
                 st.plotly_chart(fig4_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Batang:** Memantau pergeseran tren kanal pembayaran yang disukai wali siswa dari tahun ke tahun.")
             with c2:
                 fig4_pie = style_chart(px.pie(g4, names='Type Bayar', values='Jumlah', hole=0.4, title="Proporsi Metode Pembayaran"))
                 fig4_pie.update_traces(textinfo='value+percent', texttemplate='%{value} trx<br>(%{percent})')
                 st.plotly_chart(fig4_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran keuangan.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 5. Distribusi Jenjang Kelas
-        # ---------------------------------------------------------
         st.subheader("5. Distribusi Jenjang Kelas per TA")
         if 'Jenjang' in df_s_comp.columns:
             g5 = df_s_comp.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah')
@@ -853,16 +861,16 @@ with tab5:
             with c1:
                 fig5_bar = style_chart(px.bar(g5, x='Jenjang', y='Jumlah', color='ta_clean', barmode='group', text_auto=True, title="Perbandingan Jenjang Kelas Antar TA"))
                 st.plotly_chart(fig5_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Batang:** Perbandingan volume siswa di setiap tingkatan kelas antar TA.")
             with c2:
                 fig5_pie = style_chart(px.pie(g5, names='Jenjang', values='Jumlah', hole=0.4, title="Proporsi Akumulasi Jenjang Kelas"))
                 fig5_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig5_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Distribusi pangsa siswa menurut tingkatan kelas bimbingan.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 6. Proporsi Pendaftaran Online vs Offline
-        # ---------------------------------------------------------
         st.subheader("6. Proporsi Pendaftaran Online vs Offline per TA")
         if 'Jalur_Daftar' in df_s_comp.columns:
             g6 = df_s_comp.groupby(['ta_clean', 'Jalur_Daftar']).size().reset_index(name='Jumlah')
@@ -870,16 +878,16 @@ with tab5:
             with c1:
                 fig6_bar = style_chart(px.bar(g6, x='ta_clean', y='Jumlah', color='Jalur_Daftar', barmode='group', text_auto=True, title="Diagram Batang Jalur Pendaftaran"))
                 st.plotly_chart(fig6_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Batang:** Pertumbuhan pendaftar jalur Online Web PSB dibanding pendaftaran Offline langsung.")
             with c2:
                 fig6_pie = style_chart(px.pie(g6, names='Jalur_Daftar', values='Jumlah', hole=0.4, title="Proporsi Pendaftaran Online vs Offline"))
                 fig6_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig6_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan proporsi penetrasi jalur pendaftaran digital vs konvensional.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 7. Top Asal Sekolah Pendaftar
-        # ---------------------------------------------------------
         st.subheader("7. Top Asal Sekolah Pendaftar per TA")
         if 'Asal Sekolah' in df_s_comp.columns:
             top_sch_list = df_s_comp['Asal Sekolah'].value_counts().head(10).index
@@ -888,22 +896,20 @@ with tab5:
 
             fig7_bar = style_chart(px.bar(g7, x='Asal Sekolah', y='Jumlah', color='ta_clean', barmode='group', text_auto=True, title="10 Sekolah Penyumbang Siswa Terbanyak per TA"))
             st.plotly_chart(fig7_bar, use_container_width=True)
+            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan tren pergerakan dinamika jumlah pendaftar dari 10 sekolah mitra utama antar TA.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 8. Detail Sebaran Sekolah & Lokasi Belajar
-        # ---------------------------------------------------------
         st.subheader("8. Detail Sebaran Sekolah & Lokasi Belajar Antar TA")
         if 'Asal Sekolah' in df_s_comp.columns and 'lb_clean' in df_s_comp.columns:
             g8 = df_s_comp.groupby(['ta_clean', 'Asal Sekolah', 'lb_clean']).size().reset_index(name='Jumlah_Siswa')
             st.dataframe(g8.sort_values(by=['ta_clean', 'Jumlah_Siswa'], ascending=[True, False]), use_container_width=True)
+            st.caption("📝 **Penjelasan Tabel Data:** Rincian kuantitatif distribusi domisili sekolah ke cabang lokasi belajar di setiap Tahun Ajaran.")
 
         st.divider()
 
-        # ---------------------------------------------------------
         # 9. Presentase Status Bayar per Domisili
-        # ---------------------------------------------------------
         st.subheader("9. Persentase Status Bayar per Domisili (Lunas vs Angsuran) Antar TA")
         if 'Tagihan' in df_s_comp.columns and 'Kec Tinggal' in df_s_comp.columns:
             df_s_comp['Status_Bayar'] = df_s_comp['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
@@ -914,10 +920,12 @@ with tab5:
             with c1:
                 fig9_bar = style_chart(px.bar(g9, x=dom_col, y='Jumlah', color='Status_Bayar', facet_col='ta_clean', barmode='stack', text_auto=True, title="Status Bayar per Domisili per TA"))
                 st.plotly_chart(fig9_bar, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Tumpuk:** Komparasi jumlah siswa yang telah Lunas vs Mengangsur pada masing-masing wilayah domisili dari TA ke TA.")
             with c2:
                 fig9_pie = style_chart(px.pie(g9, names='Status_Bayar', values='Jumlah', hole=0.4, title="Proporsi Lunas vs Angsuran"))
                 fig9_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig9_pie, use_container_width=True)
+                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan akumulasi rasio kesehatan pelunasan biaya bimbingan.")
 
     else:
         st.warning("Data multi-tahun ajaran tidak cukup untuk ditampilkan.")
@@ -964,10 +972,11 @@ with tab6:
             barmode='stack',
             facet_col='lb_clean',
             text_auto=True,
-            color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'},
+            color_discrete_map={'Lunas': '#00cc96', '#ef553b': '#ef553b'},
             labels={domisili_col: f'{domisili_label} Domisili', 'lb_clean': 'Lokasi Belajar'}
         ))
         st.plotly_chart(fig_status_dom, use_container_width=True)
+        st.caption("📝 **Penjelasan Diagram Batang Tumpuk:** Menampilkan proporsi jumlah siswa yang sudah Lunas (hijau) dan yang masih Mengangsur (merah) dipisahkan per wilayah domisili.")
 
         st.divider()
 
@@ -992,6 +1001,7 @@ with tab6:
         })
         
         st.dataframe(rekap_kec, use_container_width=True)
+        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan. Berguna bagi tim penagihan (*finance*) untuk memprioritaskan area pemukiman dengan persentase angsuran tinggi.")
 
         st.divider()
 
@@ -1017,6 +1027,7 @@ with tab6:
         })
         
         st.dataframe(rekap_kel, use_container_width=True)
+        st.caption("📝 **Penjelasan Tabel Rincian:** Rincian tingkat Kelurahan untuk penanganan lanjutan (*follow-up*) penagihan piutang sisa paket bimbingan.")
 
     else:
         st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
