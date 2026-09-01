@@ -6,6 +6,8 @@ import json
 import urllib.request
 import urllib.error
 import html
+import time
+import base64
 from datetime import datetime
 
 # ---------------------------------------------------------
@@ -148,9 +150,9 @@ def extract_diskon_juara_from_catatan(catatan_val):
     return None
 
 # ---------------------------------------------------------
-# HELPER GEMINI AI (REST API Native Python)
+# HELPER GEMINI AI DENGAN AUTOMATIC RETRY (PENANGANAN HTTP 503)
 # ---------------------------------------------------------
-def ask_gemini_ai(api_key, prompt_text):
+def ask_gemini_ai(api_key, prompt_text, max_retries=3):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
         
@@ -159,22 +161,26 @@ def ask_gemini_ai(api_key, prompt_text):
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     
-    try:
-        data_json = json.dumps(payload).encode('utf-8')
-        req = urllib.request.Request(url, data_json, headers=headers)
-        with urllib.request.urlopen(req) as response:
-            res_data = json.loads(response.read().decode('utf-8'))
-            return res_data['candidates'][0]['content']['parts'][0]['text']
-    except urllib.error.HTTPError as e:
+    for attempt in range(max_retries):
         try:
-            raw_err = e.read().decode('utf-8')
-            err_json = json.loads(raw_err)
-            detail_msg = err_json.get('error', {}).get('message', raw_err)
-            return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
-        except Exception:
-            return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
-    except Exception as e:
-        return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
+            data_json = json.dumps(payload).encode('utf-8')
+            req = urllib.request.Request(url, data_json, headers=headers)
+            with urllib.request.urlopen(req) as response:
+                res_data = json.loads(response.read().decode('utf-8'))
+                return res_data['candidates'][0]['content']['parts'][0]['text']
+        except urllib.error.HTTPError as e:
+            if e.code == 503 and attempt < max_retries - 1:
+                time.sleep(2)
+                continue
+            try:
+                raw_err = e.read().decode('utf-8')
+                err_json = json.loads(raw_err)
+                detail_msg = err_json.get('error', {}).get('message', raw_err)
+                return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
+            except Exception:
+                return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
+        except Exception as e:
+            return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
 # ---------------------------------------------------------
 # HEADER UTAMA & AKSES ADMIN POP-UP
@@ -1112,16 +1118,17 @@ with tab7:
 
         st.divider()
 
-        # 2. GENERATIVE AI EXECUTIVE REPORT
+        # 2. GENERATIVE AI EXECUTIVE REPORT (AUTOMATIC GENERATION LOGIC)
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
+        # Mendapatkan API Key dari Streamlit Secrets / Environment
         system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
         
         if system_gemini_key:
             user_gemini_key = system_gemini_key
-            st.success("✅ **AI Key Terhubung dari Server System.**")
+            st.success("✅ **API Key Terdeteksi dari Streamlit Secrets. Laporan AI akan dibuat secara otomatis!**")
         else:
-            with st.expander("🔑 Pengaturan API Key Google Gemini", expanded=True):
+            with st.expander("🔑 Pengaturan API Key Google Gemini (Manual)", expanded=True):
                 st.write("Dapatkan API Key gratis Anda dari [Google AI Studio](https://aistudio.google.com/app/apikey).")
                 user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
@@ -1145,24 +1152,25 @@ with tab7:
 
         data_context = "\n- ".join([""] + ctx_lines)
 
-        if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
-            if not user_gemini_key:
-                st.warning("⚠️ API Key belum dimasukkan. Silakan masukan API Key Anda di atas.")
-            else:
-                with st.spinner("🤖 Gemini AI sedang menyusun Laporan Memorandum Eksekutif..."):
-                    prompt_narrative = f"""Anda adalah Management Consultant & Chief Data Officer Senior untuk BKB Nurul Fikri.
+        # Cek apakah filter berubah untuk memperbarui laporan
+        current_context_id = f"{ta_info}_{lb_info}_{jj_info}_{dom_info}"
+        if 'last_context_id' not in st.session_state or st.session_state.last_context_id != current_context_id:
+            st.session_state.ai_report_text = None
+            st.session_state.last_context_id = current_context_id
+
+        prompt_narrative = f"""Anda adalah Management Consultant & Chief Data Officer Senior untuk BKB Nurul Fikri.
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
 
 Sertakan pula pertimbangan kualitatif operasional cabang berikut dalam analisis Anda:
-1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang senantiasa aktif terlibat dalam agenda promo ke sekolah-sekolah mitra dengan mengadakan Try Out (TO), asesmen akademik, tes MBTI, atau motivasi sebagai pengantar/pintu masuk pendaftaran.
+1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang senantiasa aktif terlibat dalam agenda promo ke sekolah-sekolah mitra dengan mengadakan Try Out (TO), asesmen akademik, tes MBTI, atau motivasi sebagai pengantar/pintu masuk pendaftaran[cite: 1].
 2. **Program START NF (Tes Literasi & Numerasi Gratis)**: Untuk memperluas jangkauan perekrutan siswa baru (SD, SMP, SMA), cabang menggelar Tes Kemampuan Dasar Literasi dan Numerasi (START NF) secara GRATIS sebagai saluran perolehan database calon siswa potensial.
 3. **Fitur & Fasilitas Unggulan Nurul Fikri**: Bagi siswa yang berhasil direkrut, cabang menyampaikan jaminan kualitas fasilitas pembelajaran lengkap sesuai flyer resmi:
-   - 100% Pengajar PTN & Pembelajaran Tatap Muka Full.
-   - Modul Cetak Zuper Book & Modul Digital Interaktif.
-   - Akses Pembelajaran Online 24 jam via Aplikasi SIP-NF & NF Juara (Video Pembelajaran, E-Modul, TryOut, Tes Formatif, & Raport Siswa).
-   - Free Chat Konsultasi dengan pengajar terbaik (Kuota 200 sesi).
-   - Analisis Peluang PTN Canggih: Sistem ANDARA (Analisis Data Raport & Alumni untuk SNBP) serta MBPJ (Matriks Bantu Pemilihan Jurusan untuk SNBT).
+   - 100% Pengajar PTN & Pembelajaran Tatap Muka Full[cite: 3].
+   - Modul Cetak Zuper Book & Modul Digital Interaktif[cite: 3].
+   - Akses Pembelajaran Online 24 jam via Aplikasi SIP-NF & NF Juara (Video Pembelajaran, E-Modul, TryOut, Tes Formatif, & Raport Siswa)[cite: 3].
+   - Free Chat Konsultasi dengan pengajar terbaik (Kuota 200 sesi)[cite: 3].
+   - Analisis Peluang PTN Canggih: Sistem ANDARA (Analisis Data Raport & Alumni untuk SNBP) serta MBPJ (Matriks Bantu Pemilihan Jurusan untuk SNBT)[cite: 3].
 
 Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesional berikut:
 
@@ -1179,22 +1187,33 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 (Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, dan rasio pelunasan berdasarkan data riil saat ini, serta saluran masuk pendaftar).
 
 ### 2. ANALISIS DIAGNOSTIK (Why It Happened)
-(Analisis akar masalah & pemicu. Evaluasi efektivitas keterlibatan tim cabang dalam promo sekolah dengan TO/MBTI/Asesmen, serta efektivitas program START NF Gratis sebagai pendorong minat daftar siswa).
+(Analisis akar masalah & pemicu. Evaluasi efektivitas keterlibatan tim cabang dalam promo sekolah dengan TO/MBTI/Asesmen[cite: 1], serta efektivitas program START NF Gratis sebagai pendorong minat daftar siswa).
 
 ### 3. ANALISIS PREDIKTIF (What Will Happen)
-(Proyeksi tren ke depan. Proyeksikan potensi konversi peserta START NF gratis menjadi siswa berbayar, serta risiko keterlambatan pelunasan piutang jika tidak di-follow-up dengan pendampingan fasilitas belajar).
+(Proyeksi tren ke depan. Proyeksikan potensi konversi peserta START NF gratis menjadi siswa berbayar, serta risiko keterlambatan pelunasan piutang jika tidak di-follow-up dengan pendampingan fasilitas belajar[cite: 3]).
 
 ### 4. ANALISIS PRESKRIPTIF (What Should We Do)
-(Berikan 3 s/d 4 langkah strategis taktis & konkret yang HARUS dilakukan oleh Tim Cabang & Manajemen Wilayah untuk optimalisasi penagihan piutang serta peningkatan konversi pendaftar melalui penonjolan fitur unggulan seperti SIP-NF, ANDARA, dan MBPJ)."""
-                    
+(Berikan 3 s/d 4 langkah strategis taktis & konkret yang HARUS dilakukan oleh Tim Cabang & Manajemen Wilayah untuk optimalisasi penagihan piutang serta peningkatan konversi pendaftar melalui penonjolan fitur unggulan seperti SIP-NF, ANDARA, dan MBPJ[cite: 3])."""
+
+        # GENERASI OTOMATIS JIKA API KEY ADA DAN LAPORAN BELUM ADA
+        if user_gemini_key and not st.session_state.get('ai_report_text'):
+            with st.spinner("🤖 Gemini AI sedang menyusun Laporan Memorandum Eksekutif secara otomatis..."):
+                st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
+
+        # Tombol Manual jika ingin membuat ulang laporan
+        if st.button("🔄 Generasi Ulang / Perbarui Laporan AI", use_container_width=True):
+            if not user_gemini_key:
+                st.warning("⚠️ API Key belum dimasukkan.")
+            else:
+                with st.spinner("🤖 Memperbarui Laporan Eksekutif AI..."):
                     st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
 
-        # TAMPILKAN LAPORAN & TOMBOL DOWNLOAD PDF JIKA LAPORAN SUDAH DIBUAT
+        # TAMPILKAN LAPORAN & TOMBOL DOWNLOAD PDF
         if 'ai_report_text' in st.session_state and st.session_state.ai_report_text:
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            # Formatter HTML untuk Ekspor PDF via Browser Print
+            # HTML Formatter untuk Browser PDF Printing
             escaped_report = html.escape(st.session_state.ai_report_text)
             pdf_html = f"""
             <!DOCTYPE html>
@@ -1231,8 +1250,6 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
             </html>
             """
             
-            # Generasi Data URL untuk Button PDF Interaktif
-            import base64
             b64_html = base64.b64encode(pdf_html.encode('utf-8')).decode('utf-8')
             pdf_href = f'data:text/html;base64,{b64_html}'
             
@@ -1258,7 +1275,7 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 Konteks data dashboard saat ini:
 {data_context}
 
-Konteks Program: Cabang rajin promo TO/asesmen ke sekolah, mengadakan tes START NF (Literasi & Numerasi) gratis, dan mempromosikan fasilitas belajar (Pengajar PTN, SIP-NF, ANDARA, MBPJ).
+Konteks Program: Cabang rajin promo TO/asesmen ke sekolah[cite: 1], mengadakan tes START NF (Literasi & Numerasi) gratis, dan mempromosikan fasilitas belajar (Pengajar PTN, SIP-NF, ANDARA, MBPJ)[cite: 3].
 
 Pertanyaan Pengguna: '{user_question}'
 
