@@ -1,5 +1,4 @@
 import streamlit as st
-api_key = st.secrets["GCP_API_KEY"]
 import pandas as pd
 import plotly.express as px
 import glob
