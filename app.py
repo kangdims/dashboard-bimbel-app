@@ -1073,7 +1073,7 @@ with tab6:
 # --- TAB 7: ANALISIS AI & EXECUTIVE SUMMARY ---
 with tab7:
     st.header("🤖 Executive AI Analytics & Smart Insights Assistant")
-    st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif dengan struktur Memorandum Resmi & Pendekatan 4 Analisis Data (Deskriptif, Diagnostik, Prediktif, & Preskriptif).")
+    st.info("💡 **Otomasisasi AI:** Laporan Eksekutif berstruktur Memorandum Resmi di bawah ini dibuat secara otomatis begitu filter berubah.")
 
     if not df_siswa.empty:
         sender_cabang = f"Tim Cabang {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Tim Gabungan Cabang (Wilayah Megapolitan Selatan)"
@@ -1118,59 +1118,51 @@ with tab7:
 
         st.divider()
 
-        # 2. GENERATIVE AI EXECUTIVE REPORT (AUTOMATIC GENERATION LOGIC)
+        # 2. GENERATIVE AI EXECUTIVE REPORT (OTOMATIS BERDASARKAN FILTER)
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
-        # Mendapatkan API Key dari Streamlit Secrets / Environment
-        system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
-        
-        if system_gemini_key:
-            user_gemini_key = system_gemini_key
-            st.success("✅ **API Key Terdeteksi dari Streamlit Secrets. Laporan AI akan dibuat secara otomatis!**")
-        else:
-            with st.expander("🔑 Pengaturan API Key Google Gemini (Manual)", expanded=True):
-                st.write("Dapatkan API Key gratis Anda dari [Google AI Studio](https://aistudio.google.com/app/apikey).")
-                user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
+        # Ambil API Key dari Secrets Streamlit / GitHub
+        user_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
 
-        ctx_lines = [
-            f"Filter Terpilih: {ta_info}, {lb_info}, {jj_info}, {dom_info}",
-            f"Total Siswa Terdaftar: {tot_siswa} Siswa",
-            f"Total Target Paket Bimbingan: Rp {tot_paket:,.0f}",
-            f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
-            f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
-            f"Total Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
-        ]
-        if 'Jalur_Daftar' in df_siswa.columns:
-            jalur_str = ', '.join([f'{k}: {v}' for k,v in df_siswa['Jalur_Daftar'].value_counts().items()])
-            ctx_lines.append(f"Metode Pendaftaran: {jalur_str}")
-        if 'Asal Sekolah' in df_siswa.columns:
-            top_sch_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Asal Sekolah'].value_counts().head(5).items()])
-            ctx_lines.append(f"Top Asal Sekolah: {top_sch_str}")
-        if 'Kec Tinggal' in df_siswa.columns:
-            top_kec_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Kec Tinggal'].value_counts().head(5).items()])
-            ctx_lines.append(f"Top Domisili Kecamatan: {top_kec_str}")
+        if not user_gemini_key:
+            st.warning("⚠️ **API Key belum terdeteksi di Secrets.** Masukkan `GEMINI_API_KEY` pada Settings Streamlit Secrets untuk mengaktifkan otomatisasi.")
+            with st.expander("🔑 Masukkan API Key Manual Sementara"):
+                user_gemini_key = st.text_input("Gemini API Key:", type="password", key="manual_gemini_key")
 
-        data_context = "\n- ".join([""] + ctx_lines)
+        if user_gemini_key:
+            ctx_lines = [
+                f"Filter Terpilih: {ta_info}, {lb_info}, {jj_info}, {dom_info}",
+                f"Total Siswa Terdaftar: {tot_siswa} Siswa",
+                f"Total Target Paket Bimbingan: Rp {tot_paket:,.0f}",
+                f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
+                f"Rasio Pelunasan: {pct_pelunasan:.1f}%",
+                f"Total Sisa Tagihan Piutang: Rp {tot_tagihan:,.0f}"
+            ]
+            if 'Jalur_Daftar' in df_siswa.columns:
+                jalur_str = ', '.join([f'{k}: {v}' for k,v in df_siswa['Jalur_Daftar'].value_counts().items()])
+                ctx_lines.append(f"Metode Pendaftaran: {jalur_str}")
+            if 'Asal Sekolah' in df_siswa.columns:
+                top_sch_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Asal Sekolah'].value_counts().head(5).items()])
+                ctx_lines.append(f"Top Asal Sekolah: {top_sch_str}")
+            if 'Kec Tinggal' in df_siswa.columns:
+                top_kec_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Kec Tinggal'].value_counts().head(5).items()])
+                ctx_lines.append(f"Top Domisili Kecamatan: {top_kec_str}")
 
-        # Cek apakah filter berubah untuk memperbarui laporan
-        current_context_id = f"{ta_info}_{lb_info}_{jj_info}_{dom_info}"
-        if 'last_context_id' not in st.session_state or st.session_state.last_context_id != current_context_id:
-            st.session_state.ai_report_text = None
-            st.session_state.last_context_id = current_context_id
+            data_context = "\n- ".join([""] + ctx_lines)
 
-        prompt_narrative = f"""Anda adalah Management Consultant & Chief Data Officer Senior untuk BKB Nurul Fikri.
+            # Buat Cache Key Unik Berdasarkan Filter Aktif agar tidak Boros API Call
+            current_filter_state = f"{selected_ta}_{selected_lb}_{selected_jenjang}_{selected_kec}_{selected_kel}"
+            
+            if 'last_filter_state' not in st.session_state or st.session_state.last_filter_state != current_filter_state:
+                with st.spinner(f"🤖 Menggenerasi Memorandum Eksekutif Otomatis untuk {selected_lb}..."):
+                    prompt_narrative = f"""Anda adalah Management Consultant & Chief Data Officer Senior untuk BKB Nurul Fikri.
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
 
-Sertakan pula pertimbangan kualitatif operasional cabang berikut dalam analisis Anda:
-1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang senantiasa aktif terlibat dalam agenda promo ke sekolah-sekolah mitra dengan mengadakan Try Out (TO), asesmen akademik, tes MBTI, atau motivasi sebagai pengantar/pintu masuk pendaftaran[cite: 1].
-2. **Program START NF (Tes Literasi & Numerasi Gratis)**: Untuk memperluas jangkauan perekrutan siswa baru (SD, SMP, SMA), cabang menggelar Tes Kemampuan Dasar Literasi dan Numerasi (START NF) secara GRATIS sebagai saluran perolehan database calon siswa potensial.
-3. **Fitur & Fasilitas Unggulan Nurul Fikri**: Bagi siswa yang berhasil direkrut, cabang menyampaikan jaminan kualitas fasilitas pembelajaran lengkap sesuai flyer resmi:
-   - 100% Pengajar PTN & Pembelajaran Tatap Muka Full[cite: 3].
-   - Modul Cetak Zuper Book & Modul Digital Interaktif[cite: 3].
-   - Akses Pembelajaran Online 24 jam via Aplikasi SIP-NF & NF Juara (Video Pembelajaran, E-Modul, TryOut, Tes Formatif, & Raport Siswa)[cite: 3].
-   - Free Chat Konsultasi dengan pengajar terbaik (Kuota 200 sesi)[cite: 3].
-   - Analisis Peluang PTN Canggih: Sistem ANDARA (Analisis Data Raport & Alumni untuk SNBP) serta MBPJ (Matriks Bantu Pemilihan Jurusan untuk SNBT)[cite: 3].
+Sertakan pertimbangan kualitatif operasional cabang berikut:
+1. Promo Sekolah & Event TO/Asesmen/MBTI sebagai pengantar.
+2. Program START NF (Tes Literasi & Numerasi Gratis) untuk memperluas jangkauan siswa.
+3. Fitur & Fasilitas Unggulan NF (100% Pengajar PTN, SIP-NF, NF Juara, ANDARA, MBPJ).
 
 Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesional berikut:
 
@@ -1184,81 +1176,55 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 ---
 
 ### 1. ANALISIS DESKRIPTIF (What Happened)
-(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, dan rasio pelunasan berdasarkan data riil saat ini, serta saluran masuk pendaftar).
+(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, dan rasio pelunasan berdasarkan data riil saat ini).
 
 ### 2. ANALISIS DIAGNOSTIK (Why It Happened)
-(Analisis akar masalah & pemicu. Evaluasi efektivitas keterlibatan tim cabang dalam promo sekolah dengan TO/MBTI/Asesmen[cite: 1], serta efektivitas program START NF Gratis sebagai pendorong minat daftar siswa).
+(Analisis akar masalah & pemicu internal/eksternal. Efektivitas promo TO/MBTI/START NF Gratis).
 
 ### 3. ANALISIS PREDIKTIF (What Will Happen)
-(Proyeksi tren ke depan. Proyeksikan potensi konversi peserta START NF gratis menjadi siswa berbayar, serta risiko keterlambatan pelunasan piutang jika tidak di-follow-up dengan pendampingan fasilitas belajar[cite: 3]).
+(Proyeksi tren pendaftaran ke depan & analisis risiko keterlambatan pelunasan piutang).
 
 ### 4. ANALISIS PRESKRIPTIF (What Should We Do)
-(Berikan 3 s/d 4 langkah strategis taktis & konkret yang HARUS dilakukan oleh Tim Cabang & Manajemen Wilayah untuk optimalisasi penagihan piutang serta peningkatan konversi pendaftar melalui penonjolan fitur unggulan seperti SIP-NF, ANDARA, dan MBPJ[cite: 3])."""
-
-        # GENERASI OTOMATIS JIKA API KEY ADA DAN LAPORAN BELUM ADA
-        if user_gemini_key and not st.session_state.get('ai_report_text'):
-            with st.spinner("🤖 Gemini AI sedang menyusun Laporan Memorandum Eksekutif secara otomatis..."):
-                st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
-
-        # Tombol Manual jika ingin membuat ulang laporan
-        if st.button("🔄 Generasi Ulang / Perbarui Laporan AI", use_container_width=True):
-            if not user_gemini_key:
-                st.warning("⚠️ API Key belum dimasukkan.")
-            else:
-                with st.spinner("🤖 Memperbarui Laporan Eksekutif AI..."):
+(Rekomendasikan 3 s/d 4 langkah strategis taktis & konkret untuk optimalisasi kas dan penonjolan fitur unggulan NF)."""
+                    
                     st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
+                    st.session_state.last_filter_state = current_filter_state
 
-        # TAMPILKAN LAPORAN & TOMBOL DOWNLOAD PDF
-        if 'ai_report_text' in st.session_state and st.session_state.ai_report_text:
-            st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
-            st.markdown(st.session_state.ai_report_text)
-            
-            # HTML Formatter untuk Browser PDF Printing
-            escaped_report = html.escape(st.session_state.ai_report_text)
-            pdf_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <title>Memorandum Eksekutif - {lb_info}</title>
-                <style>
-                    body {{
-                        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                        line-height: 1.6;
-                        color: #1A1A1A;
-                        padding: 30px;
-                        max-width: 800px;
-                        margin: 0 auto;
-                    }}
-                    h1, h2, h3 {{ color: #003366; }}
-                    hr {{ border: 0; border-top: 1px solid #CCC; margin: 20px 0; }}
-                    pre {{
-                        white-space: pre-wrap;
-                        font-family: inherit;
-                        font-size: 1rem;
-                    }}
-                </style>
-            </head>
-            <body>
-                <pre>{escaped_report}</pre>
-                <script>
-                    window.onload = function() {{
-                        window.print();
-                    }}
-                </script>
-            </body>
-            </html>
-            """
-            
-            b64_html = base64.b64encode(pdf_html.encode('utf-8')).decode('utf-8')
-            pdf_href = f'data:text/html;base64,{b64_html}'
-            
-            st.markdown(
-                f'<a href="{pdf_href}" target="_blank" class="btn-download-pdf">'
-                f'📄 Download Hasil Laporan Analisis Eksekutif AI (PDF)'
-                f'</a>',
-                unsafe_allow_html=True
-            )
+            # TAMPILKAN HASIL LAPORAN
+            if 'ai_report_text' in st.session_state and st.session_state.ai_report_text:
+                st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
+                st.markdown(st.session_state.ai_report_text)
+                
+                # Render HTML PDF Download Button
+                escaped_report = html.escape(st.session_state.ai_report_text)
+                pdf_html = f"""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <meta charset="utf-8">
+                    <title>Memorandum Eksekutif - {lb_info}</title>
+                    <style>
+                        body {{ font-family: Arial, sans-serif; line-height: 1.6; padding: 40px; color: #111; }}
+                        pre {{ white-space: pre-wrap; font-family: inherit; font-size: 1rem; }}
+                    </style>
+                </head>
+                <body>
+                    <pre>{escaped_report}</pre>
+                    <script>window.onload = function() {{ window.print(); }}</script>
+                </body>
+                </html>
+                """
+                
+                import base64
+                b64_html = base64.b64encode(pdf_html.encode('utf-8')).decode('utf-8')
+                pdf_href = f'data:text/html;base64,{b64_html}'
+                
+                st.markdown(
+                    f'<a href="{pdf_href}" target="_blank" class="btn-download-pdf">'
+                    f'📄 Download Hasil Laporan Analisis Eksekutif AI (PDF)'
+                    f'</a>',
+                    unsafe_allow_html=True
+                )
 
         st.divider()
 
@@ -1274,8 +1240,6 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     prompt_q = f"""Anda adalah asisten AI Analis Data untuk BKB Nurul Fikri.
 Konteks data dashboard saat ini:
 {data_context}
-
-Konteks Program: Cabang rajin promo TO/asesmen ke sekolah[cite: 1], mengadakan tes START NF (Literasi & Numerasi) gratis, dan mempromosikan fasilitas belajar (Pengajar PTN, SIP-NF, ANDARA, MBPJ)[cite: 3].
 
 Pertanyaan Pengguna: '{user_question}'
 
