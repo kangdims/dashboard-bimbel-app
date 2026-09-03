@@ -105,23 +105,80 @@ if 'user_info' not in st.session_state:
 if 'show_welcome_toast' not in st.session_state:
     st.session_state.show_welcome_toast = False
 
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
 # ---------------------------------------------------------
-# DIALOG KONFIRMASI RESET PASSWORD
+# HELPER PENGIRIMAN EMAIL SUNTIKAN SMTP GMAIL RIIL
+# ---------------------------------------------------------
+def send_reset_email_real(target_email, new_password, idpeg):
+    sender_email = st.secrets.get("SENDER_EMAIL", "")
+    sender_password = st.secrets.get("SENDER_PASSWORD", "")
+    
+    if not sender_email or not sender_password:
+        return False, "SENDER_EMAIL atau SENDER_PASSWORD belum diset pada Streamlit Secrets!"
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"BKB Nurul Fikri System <{sender_email}>"
+        msg['To'] = target_email
+        msg['Subject'] = f"🔒 Verifikasi Reset Password Dashboard - ID Pegawai {idpeg}"
+
+        body = f"""Assalamu'alaikum Wr. Wb.
+
+Pemberitahuan perubahan password akun Dashboard Evidence-Based Policy Tool BKB Nurul Fikri:
+
+- ID Pegawai : {idpeg}
+- Password Baru : {new_password}
+- Alamat Gmail : {target_email}
+
+Password Anda telah berhasil diperbarui. Silakan gunakan password baru ini untuk melakukan login kembali ke dalam sistem dashboard.
+
+Jika Anda tidak merasa melakukan tindakan ini, segera hubungi Admin Sistem atau IT Support BKB Nurul Fikri.
+
+Wassalamu'alaikum Wr. Wb.
+--
+Tim Sistem Informasi BKB Nurul Fikri
+Wilayah Megapolitan Selatan
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Koneksi ke Server SMTP Gmail (Port 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True, "Email berhasil dikirim!"
+        
+    except Exception as e:
+        return False, str(e)
+
+# ---------------------------------------------------------
+# DIALOG KONFIRMASI RESET PASSWORD DENGAN SEND EMAIL
 # ---------------------------------------------------------
 @st.dialog("Konfirmasi Reset Password")
 def confirm_reset_password_dialog(email_dest, new_password, idpeg):
     st.write("⚠️ **Apakah Anda yakin ingin mereset password?**")
     st.write(f"Verifikasi dan password baru akan dikirimkan ke alamat Gmail: **{email_dest}**")
+    
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         if st.button("Yakin", type="primary", use_container_width=True):
-            st.success(f"✅ Verifikasi reset password telah berhasil dikirim ke inbox Gmail ({email_dest}). Silakan periksa inbox Anda!")
-            time.sleep(2)
-            st.rerun()
+            with st.spinner("📧 Sedang mengirimkan email verifikasi ke inbox Gmail..."):
+                success, msg_result = send_reset_email_real(email_dest, new_password, idpeg)
+                
+                if success:
+                    st.success(f"✅ Verifikasi reset password telah berhasil dikirim ke inbox Gmail ({email_dest}). Silakan periksa inbox/spam Anda!")
+                    time.sleep(3)
+                    st.rerun()
+                else:
+                    st.error(f"❌ Gagal mengirim email verifikasi: {msg_result}")
     with col_d2:
         if st.button("Batal", use_container_width=True):
             st.rerun()
-
+            
 # ---------------------------------------------------------
 # HALAMAN LOGIN UTAMA
 # ---------------------------------------------------------
