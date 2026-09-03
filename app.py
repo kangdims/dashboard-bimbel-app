@@ -104,81 +104,29 @@ if 'user_info' not in st.session_state:
     st.session_state.user_info = None
 if 'show_welcome_toast' not in st.session_state:
     st.session_state.show_welcome_toast = False
-
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
+if 'custom_passwords' not in st.session_state:
+    st.session_state.custom_passwords = {}  # Memori password per ID Pegawai
 
 # ---------------------------------------------------------
-# HELPER PENGIRIMAN EMAIL SUNTIKAN SMTP GMAIL RIIL
-# ---------------------------------------------------------
-def send_reset_email_real(target_email, new_password, idpeg):
-    sender_email = st.secrets.get("SENDER_EMAIL", "")
-    sender_password = st.secrets.get("SENDER_PASSWORD", "")
-    
-    if not sender_email or not sender_password:
-        return False, "SENDER_EMAIL atau SENDER_PASSWORD belum diset pada Streamlit Secrets!"
-
-    try:
-        msg = MIMEMultipart()
-        msg['From'] = f"BKB Nurul Fikri System <{sender_email}>"
-        msg['To'] = target_email
-        msg['Subject'] = f"🔒 Verifikasi Reset Password Dashboard - ID Pegawai {idpeg}"
-
-        body = f"""Assalamu'alaikum Wr. Wb.
-
-Pemberitahuan perubahan password akun Dashboard Evidence-Based Policy Tool BKB Nurul Fikri:
-
-- ID Pegawai : {idpeg}
-- Password Baru : {new_password}
-- Alamat Gmail : {target_email}
-
-Password Anda telah berhasil diperbarui. Silakan gunakan password baru ini untuk melakukan login kembali ke dalam sistem dashboard.
-
-Jika Anda tidak merasa melakukan tindakan ini, segera hubungi Admin Sistem atau IT Support BKB Nurul Fikri.
-
-Wassalamu'alaikum Wr. Wb.
---
-Tim Sistem Informasi BKB Nurul Fikri
-Wilayah Megapolitan Selatan
-"""
-        msg.attach(MIMEText(body, 'plain'))
-
-        # Koneksi ke Server SMTP Gmail (Port 587)
-        server = smtplib.SMTP('smtp.gmail.com', 587)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.send_message(msg)
-        server.quit()
-        return True, "Email berhasil dikirim!"
-        
-    except Exception as e:
-        return False, str(e)
-
-# ---------------------------------------------------------
-# DIALOG KONFIRMASI RESET PASSWORD DENGAN SEND EMAIL
+# DIALOG KONFIRMASI RESET PASSWORD (TANPA GMAIL)
 # ---------------------------------------------------------
 @st.dialog("Konfirmasi Reset Password")
-def confirm_reset_password_dialog(email_dest, new_password, idpeg):
+def confirm_reset_password_dialog(new_password):
     st.write("⚠️ **Apakah Anda yakin ingin mereset password?**")
-    st.write(f"Verifikasi dan password baru akan dikirimkan ke alamat Gmail: **{email_dest}**")
+    st.write("Password lama Anda akan diperbarui dengan password baru yang diinput.")
     
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         if st.button("Yakin", type="primary", use_container_width=True):
-            with st.spinner("📧 Sedang mengirimkan email verifikasi ke inbox Gmail..."):
-                success, msg_result = send_reset_email_real(email_dest, new_password, idpeg)
-                
-                if success:
-                    st.success(f"✅ Verifikasi reset password telah berhasil dikirim ke inbox Gmail ({email_dest}). Silakan periksa inbox/spam Anda!")
-                    time.sleep(3)
-                    st.rerun()
-                else:
-                    st.error(f"❌ Gagal mengirim email verifikasi: {msg_result}")
+            user_id = st.session_state.user_info.get('idpeg')
+            st.session_state.custom_passwords[user_id] = new_password
+            st.success("✅ Password berhasil diperbarui!")
+            time.sleep(1.5)
+            st.rerun()
     with col_d2:
         if st.button("Batal", use_container_width=True):
             st.rerun()
-            
+
 # ---------------------------------------------------------
 # HALAMAN LOGIN UTAMA
 # ---------------------------------------------------------
@@ -195,18 +143,21 @@ if not st.session_state.logged_in:
             
             if btn_login:
                 clean_id = input_idpeg.strip()
+                # Cek apakah pengguna sudah memiliki password reset khusus
+                valid_pass = st.session_state.custom_passwords.get(clean_id, "12345678")
+                
                 if not df_peg_access.empty:
                     user_match = df_peg_access[df_peg_access['idpeg_str'] == clean_id]
-                    if not user_match.empty and input_password == "12345678":
+                    if not user_match.empty and input_password == valid_pass:
                         user_data = user_match.iloc[0].to_dict()
                         st.session_state.logged_in = True
                         st.session_state.user_info = user_data
                         st.session_state.show_welcome_toast = True
                         st.rerun()
                     else:
-                        st.error("❌ ID Pegawai atau Password salah! (Gunakan password standar 12345678)")
+                        st.error("❌ ID Pegawai atau Password salah!")
                 else:
-                    if input_idpeg == "admin" and input_password == "12345678":
+                    if input_idpeg == "admin" and input_password == valid_pass:
                         st.session_state.logged_in = True
                         st.session_state.user_info = {
                             'nama_peg': 'Admin Sistem',
@@ -239,21 +190,22 @@ if st.session_state.show_welcome_toast:
     st.session_state.show_welcome_toast = False
 
 # ---------------------------------------------------------
-# MODUL RESET PASSWORD
+# MODUL RESET PASSWORD (POJOK KIRI ATAS - DENGAN MAKS 25 CHAR)
 # ---------------------------------------------------------
 col_top_left, col_top_right = st.columns([1.5, 3])
 with col_top_left:
     with st.popover("🔑 Reset Password Pegawai"):
         st.subheader("⚙️ Reset Password")
+        st.caption("Batas maksimal 25 karakter (kombinasi huruf, angka, & simbol).")
         new_pass_input = st.text_input("Password Baru:", type="password", key="reset_new_pass")
-        gmail_input = st.text_input("Alamat Gmail Verifikasi:", placeholder="contoh@gmail.com", key="reset_gmail")
+        
         if st.button("Submit Reset", type="primary", use_container_width=True):
-            if not new_pass_input or not gmail_input:
-                st.warning("⚠️ Mohon isi password baru dan alamat gmail.")
-            elif "@" not in gmail_input or "." not in gmail_input:
-                st.warning("⚠️ Alamat Gmail tidak valid.")
+            if not new_pass_input:
+                st.warning("⚠️ Password baru tidak boleh kosong.")
+            elif len(new_pass_input) > 25:
+                st.error("❌ Panjang password melebihi batas maksimal (Maks. 25 Karakter).")
             else:
-                confirm_reset_password_dialog(gmail_input, new_pass_input, user.get('idpeg'))
+                confirm_reset_password_dialog(new_pass_input)
 
 with col_top_right:
     st.write(f"👤 **Login sebagai:** {nama_peg} ({titel_peg}) | **Area:** {area_peg}")
@@ -520,7 +472,7 @@ with f_col5:
     selected_kel = st.selectbox("🏠 Kelurahan:", list_kel)
 
 # ---------------------------------------------------------
-# APLIKASI FILTER KE SEMUA DATAFRAME (CASE-INSENSITIVE)
+# APLIKASI FILTER KE SEMUA DATAFRAME
 # ---------------------------------------------------------
 df_trx = df_trx_raw.copy()
 df_siswa = df_siswa_raw.copy()
@@ -575,7 +527,7 @@ with tab1:
             daily_trx = df_trx.groupby('Tanggal')['Jumlah'].sum().reset_index()
             fig_line = style_chart(px.line(daily_trx, x='Tanggal', y='Jumlah', markers=True))
             st.plotly_chart(fig_line, use_container_width=True)
-            st.caption("📝 **Penjelasan Grafik:** Grafik garis di atas menggambarkan fluktuasi nominal pendapatan harian. Titik puncak menandakan tanggal dengan volume transaksi keuangan tertinggi pada periode terfilter.")
+            st.caption("📝 **Penjelasan Grafik:** Grafik garis di atas menggambarkan fluktuasi nominal pendapatan harian.")
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
@@ -583,7 +535,7 @@ with tab1:
             fig_pie = style_chart(px.pie(df_pie_summary, names='Type Bayar', values='Jumlah_Siswa', hole=0.4))
             fig_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
             st.plotly_chart(fig_pie, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Diagram donat di atas memperlihatkan persentase dan frekuensi penggunaan jenis metode pembayaran (Cash, Transfer, Debit, Virtual Account) yang digunakan oleh wali siswa.")
+            st.caption("📝 **Penjelasan Diagram:** Diagram donat di atas memperlihatkan persentase metode pembayaran.")
 
         st.divider()
 
@@ -593,7 +545,7 @@ with tab1:
             kat_trx_df.columns = ['Status Siswa', 'Jumlah Transaksi']
             fig_kat_trx = style_chart(px.bar(kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi', color='Status Siswa'))
             st.plotly_chart(fig_kat_trx, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa (Siswa Baru Rp300k, Siswa Lama Rp50k, atau NFIC Rp200k).")
+            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa.")
     else:
         st.warning("Data Transaksi tidak ditemukan untuk filter terpilih.")
 
@@ -616,7 +568,7 @@ with tab2:
                 kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
                 fig_kat_siswa = style_chart(px.bar(kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah', color='Status Siswa'))
                 st.plotly_chart(fig_kat_siswa, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram:** Menunjukkan komposisi kuantitas pendaftar terfilter berdasarkan kategori pendaftar (Baru vs Re-enrollment/Lama).")
+                st.caption("📝 **Penjelasan Diagram:** Menunjukkan komposisi kuantitas pendaftar terfilter berdasarkan kategori pendaftar.")
 
         with c2:
             st.subheader("Distribusi Jenjang Kelas")
@@ -624,7 +576,7 @@ with tab2:
             jenjang_df.columns = ['Jenjang', 'Jumlah']
             fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Menggambarkan tingkat kepadatan jumlah siswa aktif pada masing-masing tingkatan kelas (SD, SMP, SMA, & RONIN).")
+            st.caption("📝 **Penjelasan Diagram:** Menggambarkan tingkat kepadatan jumlah siswa aktif pada masing-masing tingkatan kelas.")
 
         with c3:
             st.subheader("Proporsi Pendaftaran Online vs Offline")
@@ -634,7 +586,7 @@ with tab2:
                 fig_jalur_pie = style_chart(px.pie(df_jalur, names='Jalur Pendaftaran', values='Jumlah Siswa', hole=0.4, color='Jalur Pendaftaran', color_discrete_map={'Online (Web PSB)': '#00cc96', 'Offline (Cabang / WA)': '#636efa'}))
                 fig_jalur_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online dibandingkan pendaftaran manual langsung di Cabang/WA.")
+                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online vs Offline.")
     else:
         st.warning("Data Siswa tidak ditemukan untuk filter terpilih.")
 
@@ -650,7 +602,7 @@ with tab3:
             fig_sekolah = style_chart(px.bar(top_sekolah, y='Asal Sekolah', x='Jumlah Siswa', orientation='h', text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis'))
             fig_sekolah.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_sekolah, use_container_width=True)
-            st.caption("📝 **Penjelasan Bagan Horisontal:** Peringkat 10 sekolah penyumbang pendaftar terbanyak. Menjadi prioritas utama dalam kegiatan sosialisasi & pameran pendidikan.")
+            st.caption("📝 **Penjelasan Bagan Horisontal:** Peringkat 10 sekolah penyumbang pendaftar terbanyak.")
 
         with c2:
             st.write("📊 **Detail Sebaran Sekolah & Lokasi Belajar**")
@@ -658,7 +610,7 @@ with tab3:
             sekolah_lb.columns = ['Asal Sekolah', 'Lokasi Belajar', 'Jumlah Siswa']
             sekolah_lb = sekolah_lb.sort_values(by='Jumlah Siswa', ascending=False)
             st.dataframe(sekolah_lb, use_container_width=True, height=350)
-            st.caption("📝 **Penjelasan Tabel:** Rincian kuantitatif distribusi pendaftar asal sekolah tertentu ke cabang/lokasi belajar yang dipilih.")
+            st.caption("📝 **Penjelasan Tabel:** Rincian kuantitatif distribusi pendaftar asal sekolah tertentu ke cabang/lokasi belajar.")
 
         st.divider()
 
@@ -672,7 +624,7 @@ with tab3:
             fig_jenjang_kec = style_chart(px.bar(jenjang_kec, x='Kec Tinggal', y='Jumlah_Siswa', color='Jenjang', barmode='group', text='Label_Text', labels={'Kec Tinggal': 'Kecamatan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}))
             fig_jenjang_kec.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kec, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Grouped Bar:** Menampilkan persebaran jenjang pendidikan siswa di setiap wilayah Kecamatan domisili beserta kontribusi persentasenya.")
+            st.caption("📝 **Penjelasan Diagram Grouped Bar:** Menampilkan persebaran jenjang pendidikan siswa di setiap wilayah Kecamatan domisili.")
 
         st.divider()
 
@@ -686,7 +638,7 @@ with tab3:
             fig_jenjang_kel = style_chart(px.bar(jenjang_kel, x='Kel Tinggal', y='Jumlah_Siswa', color='Jenjang', barmode='group', text='Label_Text', labels={'Kel Tinggal': 'Kelurahan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}))
             fig_jenjang_kel.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kel, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Pemetaan tingkat kelurahan secara mendalam untuk mengidentifikasi area pemukiman yang paling potensial untuk penetrasi pasar.")
+            st.caption("📝 **Penjelasan Diagram:** Pemetaan tingkat kelurahan secara mendalam.")
     else:
         st.warning("Data Sekolah/Domisili tidak ditemukan.")
 
@@ -718,7 +670,7 @@ with tab4:
                 fig_diskon_pie = style_chart(px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4))
                 fig_diskon_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig_diskon_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan proporsi penggunaan jenis promo/diskon (seperti Diskon Juara/PSJ, Anak Guru, Saudara Kandung) yang diklaim pendaftar.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan proporsi penggunaan jenis promo/diskon yang diklaim pendaftar.")
 
         with c2:
             st.subheader("Total Nominal Diskon per Lokasi Belajar")
@@ -727,23 +679,22 @@ with tab4:
                 diskon_lokasi.columns = ['Lokasi Belajar', 'Besar Diskon']
                 fig_diskon_bar = style_chart(px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon'))
                 st.plotly_chart(fig_diskon_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total pengeluaran beban potongan harga (diskon kupon) yang diberikan pada masing-masing cabang.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total pengeluaran beban potongan harga (diskon kupon) per cabang.")
 
         st.divider()
 
         st.subheader("Detail Data Siswa Penerima Diskon & Program Juara (Terfilter)")
         disp_cols = [c for c in ['Nomor Formulir', 'Kwitansi', 'Nama Diskon', 'Besar Diskon', 'Sumber', 'lb_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal'] if c in df_diskon.columns]
         st.dataframe(df_diskon[disp_cols], use_container_width=True)
-        st.caption("📝 **Penjelasan Tabel:** Rincian baris data siswa yang berhak menerima potongan harga beserta nilai nominal dan sumber pencatatannya.")
+        st.caption("📝 **Penjelasan Tabel:** Rincian baris data siswa yang berhak menerima potongan harga.")
     else:
         st.warning("Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
 
-# --- TAB 5: PERBANDINGAN MULTI-TA (DENGAN CASE-INSENSITIVE FILTERING & 9 SUB-ANALISIS) ---
+# --- TAB 5: PERBANDINGAN MULTI-TA ---
 with tab5:
     st.header("📈 Analisis & Komparasi Tren Multi-Tahun Ajaran (Multi-TA)")
     st.info("💡 **Tersinkronisasi:** Seluruh grafik di bawah ini membandingkan tren performa antar Tahun Ajaran berdasarkan Lokasi, Jenjang, dan Domisili terfilter.")
 
-    # Filter khusus komparasi dengan pencocokan case-insensitive (.str.upper())
     df_s_comp = df_siswa_raw.copy()
     if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] and 'lb_clean' in df_s_comp.columns:
         df_s_comp = df_s_comp[df_s_comp['lb_clean'].fillna('').astype(str).str.upper() == selected_lb.upper()]
@@ -761,7 +712,6 @@ with tab5:
         df_t_comp = df_t_comp[df_t_comp['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
 
     if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
-        
         # 1. Jumlah Siswa Lama vs Baru per TA
         st.subheader("1. Jumlah Siswa Lama vs Baru per TA")
         if 'Kategori_Siswa' in df_s_comp.columns:
@@ -810,7 +760,7 @@ with tab5:
             g3 = df_t_comp.groupby(['Bulan_Tgl', 'ta_clean'])['Jumlah'].sum().reset_index()
             fig3_line = style_chart(px.line(g3, x='Bulan_Tgl', y='Jumlah', color='ta_clean', markers=True, title="Grafik Tren Pendapatan Harian"))
             st.plotly_chart(fig3_line, use_container_width=True)
-            st.caption("📝 **Penjelasan Grafik Garis Multi-Garis:** Menyejajarkan pola pemasukan harian antar TA pada kalender tanggal yang sama untuk menganalisis puncak periode penerimaan kas.")
+            st.caption("📝 **Penjelasan Grafik Garis Multi-Garis:** Menyejajarkan pola pemasukan harian antar TA pada kalender tanggal yang sama.")
 
         st.divider()
 
@@ -822,12 +772,12 @@ with tab5:
             with c1:
                 fig4_bar = style_chart(px.bar(g4, x='ta_clean', y='Jumlah', color='Type Bayar', barmode='group', text_auto=True, title="Diagram Batang Metode Pembayaran"))
                 st.plotly_chart(fig4_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Memantau pergeseran tren kanal pembayaran yang disukai wali siswa dari tahun ke tahun.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Memantau pergeseran tren kanal pembayaran dari tahun ke tahun.")
             with c2:
                 fig4_pie = style_chart(px.pie(g4, names='Type Bayar', values='Jumlah', hole=0.4, title="Proporsi Metode Pembayaran"))
                 fig4_pie.update_traces(textinfo='value+percent', texttemplate='%{value} trx<br>(%{percent})')
                 st.plotly_chart(fig4_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran keuangan.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran.")
 
         st.divider()
 
@@ -856,12 +806,12 @@ with tab5:
             with c1:
                 fig6_bar = style_chart(px.bar(g6, x='ta_clean', y='Jumlah', color='Jalur_Daftar', barmode='group', text_auto=True, title="Diagram Batang Jalur Pendaftaran"))
                 st.plotly_chart(fig6_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Pertumbuhan pendaftar jalur Online Web PSB dibanding pendaftaran Offline langsung.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Pertumbuhan pendaftar jalur Online Web PSB dibanding Offline.")
             with c2:
                 fig6_pie = style_chart(px.pie(g6, names='Jalur_Daftar', values='Jumlah', hole=0.4, title="Proporsi Pendaftaran Online vs Offline"))
                 fig6_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig6_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan proporsi penetrasi jalur pendaftaran digital vs konvensional.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan proporsi penetrasi jalur pendaftaran.")
 
         st.divider()
 
@@ -896,7 +846,7 @@ with tab5:
             with c1:
                 fig9_bar = style_chart(px.bar(g9, x=dom_col, y='Jumlah', color='Status_Bayar', facet_col='ta_clean', barmode='stack', text_auto=True, title="Status Bayar per Domisili per TA"))
                 st.plotly_chart(fig9_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Tumpuk:** Komparasi jumlah siswa yang telah Lunas vs Mengangsur pada masing-masing wilayah domisili dari TA ke TA.")
+                st.caption("📝 **Penjelasan Diagram Tumpuk:** Komparasi jumlah siswa Lunas vs Mengangsur pada wilayah domisili dari TA ke TA.")
             with c2:
                 fig9_pie = style_chart(px.pie(g9, names='Status_Bayar', values='Jumlah', hole=0.4, title="Proporsi Lunas vs Angsuran"))
                 fig9_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
@@ -932,7 +882,7 @@ with tab6:
         
         fig_status_dom = style_chart(px.bar(dom_summary, x=domisili_col, y='Jumlah', color='Status_Bayar', barmode='stack', text_auto=True, color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'}))
         st.plotly_chart(fig_status_dom, use_container_width=True)
-        st.caption("📝 **Penjelasan Diagram Batang Tumpuk:** Menampilkan proporsi jumlah siswa yang sudah Lunas (hijau) dan yang masih Mengangsur (merah) dipisahkan per wilayah domisili.")
+        st.caption("📝 **Penjelasan Diagram Batang Tumpuk:** Menampilkan proporsi jumlah siswa Lunas dan Mengangsur dipisahkan per wilayah domisili.")
 
         st.divider()
 
@@ -949,8 +899,7 @@ with tab6:
         rekap_kec['% Angsuran'] = (rekap_kec['Angsuran'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
 
         st.dataframe(rekap_kec, use_container_width=True)
-        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan. Berguna bagi tim penagihan (*finance*) untuk memprioritaskan area pemukiman dengan persentase angsuran tinggi.")
-
+        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan.")
     else:
         st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
 
