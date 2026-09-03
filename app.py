@@ -169,6 +169,17 @@ if not st.session_state.logged_in:
                         st.rerun()
                     else:
                         st.error("❌ File keyaccess_peg.xlsx tidak ditemukan.")
+    
+    # Footer Copyright pada Halaman Login
+    st.markdown(
+        """
+        <hr style="margin-top: 50px; margin-bottom: 20px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);">
+        <div style="text-align: center; color: gray; font-size: 0.85rem; padding-bottom: 20px;">
+            Copyright © 2026 PT. Indonesia Juara Semesta. All Rights Reserved. Dikembangkan oleh Ade Dimas Shirotuddin.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
     st.stop()
 
 # ---------------------------------------------------------
@@ -416,13 +427,11 @@ for df_temp in [df_trx_raw, df_siswa_raw, df_diskon_raw]:
     if not df_temp.empty and 'lb_clean' in df_temp.columns:
         all_lb_set.update(df_temp['lb_clean'].dropna().unique())
 
-# Ekstraksi lokasi kerja pegawai (bisa multiple dipisahkan koma)
 user_lbs = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
 allowed_lb_options = []
 
 if titel_peg in ["SRO", "JRO", "ZT PLUS"]:
     if len(user_lbs) > 1:
-        # Jika pegawai bertugas di 2 lokasi atau lebih, buat opsi gabungan
         label_gabungan = f"Gabungan Lokasi Bertugas ({' & '.join(sorted(user_lbs))})"
         allowed_lb_options = [label_gabungan] + sorted(user_lbs)
     elif len(user_lbs) == 1:
@@ -463,7 +472,6 @@ with f_col2:
 with f_col3:
     selected_jenjang = st.selectbox("🎓 Jenjang Kelas:", list_master_jenjang)
 
-# Helper Function Penyaringan Lokasi Multi / Single
 def filter_dataframe_location(df_in, lb_selected, user_locations):
     if df_in.empty or 'lb_clean' not in df_in.columns:
         return df_in
@@ -473,11 +481,9 @@ def filter_dataframe_location(df_in, lb_selected, user_locations):
     if lb_selected in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"]:
         return df_in
     elif str(lb_selected).startswith("Gabungan"):
-        # Jika opsi gabungan dipilih, filter data yang masuk ke dalam list lokasi pegawai
         target_locs_upper = [x.upper() for x in user_locations]
         return df_in[col_lb_upper.isin(target_locs_upper)]
     else:
-        # Jika opsi 1 lokasi dipilih
         return df_in[col_lb_upper == str(lb_selected).upper()]
 
 df_kec_source = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
@@ -504,18 +510,6 @@ df_trx = filter_dataframe_location(df_trx_raw, selected_lb, user_lbs)
 df_siswa = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
 df_diskon = filter_dataframe_location(df_diskon_raw, selected_lb, user_lbs)
 
-for df_target in [df_trx, df_siswa, df_diskon]:
-    if not df_target.empty:
-        if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_target.columns:
-            df_target = df_target[df_target['ta_clean'].fillna('').astype(str).str.upper() == selected_ta.upper()]
-        if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_target.columns:
-            df_target = df_target[df_target['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
-        if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_target.columns:
-            df_target = df_target[df_target['Kec Tinggal'].fillna('').astype(str).str.upper() == selected_kec.upper()]
-        if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_target.columns:
-            df_target = df_target[df_target['Kel Tinggal'].fillna('').astype(str).str.upper() == selected_kel.upper()]
-
-# Terapkan kembali ke variabel utama setelah filter tambahan
 for name, df_obj in [('trx', df_trx), ('siswa', df_siswa), ('diskon', df_diskon)]:
     if not df_obj.empty:
         if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_obj.columns:
@@ -548,7 +542,7 @@ tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "🤖 Analisis AI & Executive Summary"
 ])
 
-# --- TAB 1: LAPORAN TRANSAKSI (SINKRON DENGAN DUA/SATU LOKASI) ---
+# --- TAB 1: LAPORAN TRANSAKSI ---
 with tab1:
     if not df_trx.empty:
         col1, col2, col3, col4 = st.columns(4)
@@ -1120,3 +1114,16 @@ Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di 
 
     else:
         st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
+
+# ---------------------------------------------------------
+# FOOTER COPYRIGHT
+# ---------------------------------------------------------
+st.markdown(
+    """
+    <hr style="margin-top: 50px; margin-bottom: 20px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);">
+    <div style="text-align: center; color: gray; font-size: 0.85rem; padding-bottom: 20px;">
+        Copyright © 2026 PT. Indonesia Juara Semesta. All Rights Reserved. Dikembangkan oleh Ade Dimas Shirotuddin.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
