@@ -96,6 +96,15 @@ def load_pegawai_access():
         try:
             df = pd.read_excel(files[0])
             df['idpeg_str'] = df['idpeg'].apply(lambda x: str(int(x)) if pd.notna(x) and isinstance(x, (int, float)) else str(x).strip())
+            
+            # Normalisasi kolom password dari Excel
+            if 'password' in df.columns:
+                df['password_str'] = df['password'].apply(
+                    lambda x: str(int(x)) if pd.notna(x) and isinstance(x, (int, float)) else (str(x).strip() if pd.notna(x) else "12345678")
+                )
+            else:
+                df['password_str'] = "12345678"
+                
             return df
         except Exception as e:
             st.error(f"Gagal membaca file keyaccess_peg.xlsx: {e}")
@@ -146,25 +155,31 @@ if not st.session_state.logged_in:
     with c_log2:
         with st.form("form_login"):
             input_idpeg = st.text_input("ID Pegawai (idpeg):", placeholder="Masukkan ID Pegawai Anda")
-            input_password = st.text_input("Password:", type="password", placeholder="Password standar: 12345678")
+            input_password = st.text_input("Password:", type="password", placeholder="Masukkan Password Anda")
             btn_login = st.form_submit_button("Submit Login", type="primary", use_container_width=True)
             
             if btn_login:
                 clean_id = input_idpeg.strip()
-                valid_pass = st.session_state.custom_passwords.get(clean_id, "12345678")
                 
                 if not df_peg_access.empty:
                     user_match = df_peg_access[df_peg_access['idpeg_str'] == clean_id]
-                    if not user_match.empty and input_password == valid_pass:
-                        user_data = user_match.iloc[0].to_dict()
-                        st.session_state.logged_in = True
-                        st.session_state.user_info = user_data
-                        st.session_state.show_welcome_toast = True
-                        st.rerun()
+                    if not user_match.empty:
+                        excel_pass = user_match.iloc[0].get('password_str', '12345678')
+                        valid_pass = st.session_state.custom_passwords.get(clean_id, excel_pass)
+                        
+                        if input_password == valid_pass:
+                            user_data = user_match.iloc[0].to_dict()
+                            st.session_state.logged_in = True
+                            st.session_state.user_info = user_data
+                            st.session_state.show_welcome_toast = True
+                            st.rerun()
+                        else:
+                            st.error("❌ Password yang Anda masukkan salah!")
                     else:
-                        st.error("❌ ID Pegawai atau Password salah!")
+                        st.error("❌ ID Pegawai tidak terdaftar!")
                 else:
-                    if input_idpeg == "admin" and input_password == valid_pass:
+                    admin_pass = st.session_state.custom_passwords.get("admin", "12345678")
+                    if clean_id == "admin" and input_password == admin_pass:
                         st.session_state.logged_in = True
                         st.session_state.user_info = {
                             'nama_peg': 'Admin Sistem',
@@ -998,7 +1013,7 @@ with tab7:
 
         data_context = "\n- ".join([""] + ctx_lines)
 
-        if st.button("✨ Hasikan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
+        if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
             if not user_gemini_key:
                 st.error("⚠️ API Key tidak ditemukan. Silakan tambahkan `GEMINI_API_KEY` pada Streamlit Secrets.")
             else:
