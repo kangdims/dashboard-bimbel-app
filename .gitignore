@@ -1,2 +1,22 @@
 .env
 .streamlit/secrets.toml
+# Byte-compiled / Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+env/
+
+# Data Excel & CSV Sensitif (PII & Transaksi)
+*.xlsx
+*.xls
+*.csv
+*keyaccess_peg*
+
+# Secrets & Environment Variables
+.env
+.streamlit/secrets.toml
+
+# OS System Files
+.DS_Store
+Thumbs.db
