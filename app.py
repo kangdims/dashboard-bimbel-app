@@ -44,12 +44,20 @@ st.markdown("""
         word-break: break-word !important;
         line-height: 1.25 !important;
     }
+<<<<<<< Updated upstream
+=======
+    
+>>>>>>> Stashed changes
     div[data-testid="stAlert"] {
         background-color: var(--secondary-background-color) !important;
         color: var(--text-color) !important;
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 10px !important;
     }
+<<<<<<< Updated upstream
+=======
+
+>>>>>>> Stashed changes
     .btn-download-pdf {
         display: inline-flex;
         align-items: center;
@@ -69,6 +77,10 @@ st.markdown("""
         margin-top: 15px;
         margin-bottom: 15px;
     }
+<<<<<<< Updated upstream
+=======
+    
+>>>>>>> Stashed changes
     .greeting-title {
         font-size: 1.25rem;
         font-weight: 700;
@@ -104,6 +116,7 @@ if 'user_info' not in st.session_state:
     st.session_state.user_info = None
 if 'show_welcome_toast' not in st.session_state:
     st.session_state.show_welcome_toast = False
+<<<<<<< Updated upstream
 if 'custom_passwords' not in st.session_state:
     st.session_state.custom_passwords = {}
 
@@ -114,10 +127,71 @@ if 'custom_passwords' not in st.session_state:
 def confirm_reset_password_dialog(new_password):
     st.write("⚠️ **Apakah Anda yakin ingin mereset password?**")
     st.write("Password lama Anda akan diperbarui dengan password baru yang diinput.")
+=======
+
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+
+# ---------------------------------------------------------
+# HELPER PENGIRIMAN EMAIL SUNTIKAN SMTP GMAIL RIIL
+# ---------------------------------------------------------
+def send_reset_email_real(target_email, new_password, idpeg):
+    sender_email = st.secrets.get("SENDER_EMAIL", "")
+    sender_password = st.secrets.get("SENDER_PASSWORD", "")
+    
+    if not sender_email or not sender_password:
+        return False, "SENDER_EMAIL atau SENDER_PASSWORD belum diset pada Streamlit Secrets!"
+
+    try:
+        msg = MIMEMultipart()
+        msg['From'] = f"BKB Nurul Fikri System <{sender_email}>"
+        msg['To'] = target_email
+        msg['Subject'] = f"🔒 Verifikasi Reset Password Dashboard - ID Pegawai {idpeg}"
+
+        body = f"""Assalamu'alaikum Wr. Wb.
+
+Pemberitahuan perubahan password akun Dashboard Evidence-Based Policy Tool BKB Nurul Fikri:
+
+- ID Pegawai : {idpeg}
+- Password Baru : {new_password}
+- Alamat Gmail : {target_email}
+
+Password Anda telah berhasil diperbarui. Silakan gunakan password baru ini untuk melakukan login kembali ke dalam sistem dashboard.
+
+Jika Anda tidak merasa melakukan tindakan ini, segera hubungi Admin Sistem atau IT Support BKB Nurul Fikri.
+
+Wassalamu'alaikum Wr. Wb.
+--
+Tim Sistem Informasi BKB Nurul Fikri
+Wilayah Megapolitan Selatan
+"""
+        msg.attach(MIMEText(body, 'plain'))
+
+        # Koneksi ke Server SMTP Gmail (Port 587)
+        server = smtplib.SMTP('smtp.gmail.com', 587)
+        server.starttls()
+        server.login(sender_email, sender_password)
+        server.send_message(msg)
+        server.quit()
+        return True, "Email berhasil dikirim!"
+        
+    except Exception as e:
+        return False, str(e)
+
+# ---------------------------------------------------------
+# DIALOG KONFIRMASI RESET PASSWORD DENGAN SEND EMAIL
+# ---------------------------------------------------------
+@st.dialog("Konfirmasi Reset Password")
+def confirm_reset_password_dialog(email_dest, new_password, idpeg):
+    st.write("⚠️ **Apakah Anda yakin ingin mereset password?**")
+    st.write(f"Verifikasi dan password baru akan dikirimkan ke alamat Gmail: **{email_dest}**")
+>>>>>>> Stashed changes
     
     col_d1, col_d2 = st.columns(2)
     with col_d1:
         if st.button("Yakin", type="primary", use_container_width=True):
+<<<<<<< Updated upstream
             user_id = st.session_state.user_info.get('idpeg')
             st.session_state.custom_passwords[user_id] = new_password
             st.success("✅ Password berhasil diperbarui!")
@@ -127,6 +201,21 @@ def confirm_reset_password_dialog(new_password):
         if st.button("Batal", use_container_width=True):
             st.rerun()
 
+=======
+            with st.spinner("📧 Sedang mengirimkan email verifikasi ke inbox Gmail..."):
+                success, msg_result = send_reset_email_real(email_dest, new_password, idpeg)
+                
+                if success:
+                    st.success(f"✅ Verifikasi reset password telah berhasil dikirim ke inbox Gmail ({email_dest}). Silakan periksa inbox/spam Anda!")
+                    time.sleep(3)
+                    st.rerun()
+                else:
+                    st.error(f"❌ Gagal mengirim email verifikasi: {msg_result}")
+    with col_d2:
+        if st.button("Batal", use_container_width=True):
+            st.rerun()
+            
+>>>>>>> Stashed changes
 # ---------------------------------------------------------
 # HALAMAN LOGIN UTAMA
 # ---------------------------------------------------------
@@ -143,20 +232,32 @@ if not st.session_state.logged_in:
             
             if btn_login:
                 clean_id = input_idpeg.strip()
+<<<<<<< Updated upstream
                 valid_pass = st.session_state.custom_passwords.get(clean_id, "12345678")
                 
                 if not df_peg_access.empty:
                     user_match = df_peg_access[df_peg_access['idpeg_str'] == clean_id]
                     if not user_match.empty and input_password == valid_pass:
+=======
+                if not df_peg_access.empty:
+                    user_match = df_peg_access[df_peg_access['idpeg_str'] == clean_id]
+                    if not user_match.empty and input_password == "12345678":
+>>>>>>> Stashed changes
                         user_data = user_match.iloc[0].to_dict()
                         st.session_state.logged_in = True
                         st.session_state.user_info = user_data
                         st.session_state.show_welcome_toast = True
                         st.rerun()
                     else:
+<<<<<<< Updated upstream
                         st.error("❌ ID Pegawai atau Password salah!")
                 else:
                     if input_idpeg == "admin" and input_password == valid_pass:
+=======
+                        st.error("❌ ID Pegawai atau Password salah! (Gunakan password standar 12345678)")
+                else:
+                    if input_idpeg == "admin" and input_password == "12345678":
+>>>>>>> Stashed changes
                         st.session_state.logged_in = True
                         st.session_state.user_info = {
                             'nama_peg': 'Admin Sistem',
@@ -168,6 +269,7 @@ if not st.session_state.logged_in:
                         st.session_state.show_welcome_toast = True
                         st.rerun()
                     else:
+<<<<<<< Updated upstream
                         st.error("❌ File keyaccess_peg.xlsx tidak ditemukan.")
     
     # Footer Copyright pada Halaman Login
@@ -180,6 +282,9 @@ if not st.session_state.logged_in:
         """,
         unsafe_allow_html=True
     )
+=======
+                        st.error("❌ File keyaccess_peg.xlsx tidak ditemukan atau data tidak valid.")
+>>>>>>> Stashed changes
     st.stop()
 
 # ---------------------------------------------------------
@@ -200,6 +305,7 @@ if st.session_state.show_welcome_toast:
     st.session_state.show_welcome_toast = False
 
 # ---------------------------------------------------------
+<<<<<<< Updated upstream
 # MODUL RESET PASSWORD
 # ---------------------------------------------------------
 col_top_left, col_top_right = st.columns([1.5, 3])
@@ -216,6 +322,25 @@ with col_top_left:
                 st.error("❌ Panjang password melebihi batas maksimal (Maks. 25 Karakter).")
             else:
                 confirm_reset_password_dialog(new_pass_input)
+=======
+# MODUL RESET PASSWORD (POJOK KIRI ATAS TOP-BAR)
+# ---------------------------------------------------------
+col_top_left, col_top_right = st.columns([1.5, 3])
+
+with col_top_left:
+    with st.popover("🔑 Reset Password Pegawai"):
+        st.subheader("⚙️ Reset Password")
+        new_pass_input = st.text_input("Password Baru:", type="password", key="reset_new_pass")
+        gmail_input = st.text_input("Alamat Gmail Verifikasi:", placeholder="contoh@gmail.com", key="reset_gmail")
+        
+        if st.button("Submit Reset", type="primary", use_container_width=True):
+            if not new_pass_input or not gmail_input:
+                st.warning("⚠️ Mohon isi password baru dan alamat gmail.")
+            elif "@" not in gmail_input or "." not in gmail_input:
+                st.warning("⚠️ Alamat Gmail tidak valid.")
+            else:
+                confirm_reset_password_dialog(gmail_input, new_pass_input, user.get('idpeg'))
+>>>>>>> Stashed changes
 
 with col_top_right:
     st.write(f"👤 **Login sebagai:** {nama_peg} ({titel_peg}) | **Area:** {area_peg}")
@@ -271,6 +396,12 @@ def extract_diskon_juara_from_catatan(catatan_val):
         return 'Diskon Juara / PSJ'
     return None
 
+<<<<<<< Updated upstream
+=======
+# ---------------------------------------------------------
+# HELPER GEMINI AI (AUTOMATIC RETRY & HTTP 503 HANDLER)
+# ---------------------------------------------------------
+>>>>>>> Stashed changes
 def ask_gemini_ai(api_key, prompt_text, max_retries=3):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
@@ -298,6 +429,12 @@ def ask_gemini_ai(api_key, prompt_text, max_retries=3):
         except Exception as e:
             return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
+<<<<<<< Updated upstream
+=======
+# ---------------------------------------------------------
+# LOAD & COMBINE DATASETS DASHBOARD
+# ---------------------------------------------------------
+>>>>>>> Stashed changes
 def clean_str(val):
     if pd.isna(val):
         return None
@@ -401,6 +538,26 @@ if not df_diskon_raw.empty:
             'Sumber': 'File Diskon'
         })
 
+<<<<<<< Updated upstream
+=======
+if not df_siswa_raw.empty:
+    col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
+    col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
+    col_kwt_s = next((c for c in df_siswa_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
+
+    if col_cat_s:
+        for _, row in df_siswa_raw.iterrows():
+            jenis_diskon_cat = extract_diskon_juara_from_catatan(row.get(col_cat_s))
+            if jenis_diskon_cat:
+                list_diskon_records.append({
+                    'Nomor Formulir': clean_str(row.get(col_form_s)),
+                    'Kwitansi': clean_str(row.get(col_kwt_s)),
+                    'Nama Diskon': jenis_diskon_cat,
+                    'Besar Diskon': 0.0,
+                    'Sumber': 'Catatan Siswa'
+                })
+
+>>>>>>> Stashed changes
 df_diskon_combined = pd.DataFrame(list_diskon_records)
 if not df_diskon_combined.empty:
     df_diskon_combined = df_diskon_combined.drop_duplicates(subset=['Nomor Formulir', 'Kwitansi', 'Nama Diskon'])
@@ -427,6 +584,7 @@ for df_temp in [df_trx_raw, df_siswa_raw, df_diskon_raw]:
     if not df_temp.empty and 'lb_clean' in df_temp.columns:
         all_lb_set.update(df_temp['lb_clean'].dropna().unique())
 
+<<<<<<< Updated upstream
 user_lbs = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
 allowed_lb_options = []
 
@@ -451,6 +609,22 @@ elif titel_peg == "MANAJER AREA":
             allowed_lb_options = parsed_area_lbs
     else:
         allowed_lb_options = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
+=======
+allowed_lb_options = []
+
+if titel_peg in ["SRO", "JRO", "ZT PLUS"]:
+    user_lbs = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
+    allowed_lb_options = sorted(list(set(user_lbs)))
+elif titel_peg == "MANAJER AREA":
+    if not df_peg_access.empty and 'area' in df_peg_access.columns:
+        area_lbs = df_peg_access[df_peg_access['area'].str.upper() == area_peg.upper()]['lokasi_belajar'].dropna().tolist()
+        parsed_area_lbs = []
+        for alb in area_lbs:
+            parsed_area_lbs.extend([x.strip() for x in str(alb).split(',') if x.strip()])
+        allowed_lb_options = sorted(list(set(parsed_area_lbs)))
+    else:
+        allowed_lb_options = sorted(list(all_lb_set))
+>>>>>>> Stashed changes
 else:
     allowed_lb_options = ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] + sorted(list(all_lb_set))
 
@@ -472,6 +646,7 @@ with f_col2:
 with f_col3:
     selected_jenjang = st.selectbox("🎓 Jenjang Kelas:", list_master_jenjang)
 
+<<<<<<< Updated upstream
 def filter_dataframe_location(df_in, lb_selected, user_locations):
     if df_in.empty or 'lb_clean' not in df_in.columns:
         return df_in
@@ -487,6 +662,11 @@ def filter_dataframe_location(df_in, lb_selected, user_locations):
         return df_in[col_lb_upper == str(lb_selected).upper()]
 
 df_kec_source = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
+=======
+df_kec_source = df_siswa_raw.copy()
+if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] and 'lb_clean' in df_kec_source.columns:
+    df_kec_source = df_kec_source[df_kec_source['lb_clean'] == selected_lb]
+>>>>>>> Stashed changes
 
 list_kec = ["Semua Kecamatan"]
 if not df_kec_source.empty and 'Kec Tinggal' in df_kec_source.columns:
@@ -506,6 +686,7 @@ with f_col5:
 # ---------------------------------------------------------
 # APLIKASI FILTER KE SEMUA DATAFRAME
 # ---------------------------------------------------------
+<<<<<<< Updated upstream
 df_trx = filter_dataframe_location(df_trx_raw, selected_lb, user_lbs)
 df_siswa = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
 df_diskon = filter_dataframe_location(df_diskon_raw, selected_lb, user_lbs)
@@ -523,6 +704,24 @@ for name, df_obj in [('trx', df_trx), ('siswa', df_siswa), ('diskon', df_diskon)
         if name == 'trx': df_trx = df_obj
         elif name == 'siswa': df_siswa = df_obj
         elif name == 'diskon': df_diskon = df_obj
+=======
+df_trx = df_trx_raw.copy()
+df_siswa = df_siswa_raw.copy()
+df_diskon = df_diskon_raw.copy()
+
+for df_target in [df_trx, df_siswa, df_diskon]:
+    if not df_target.empty:
+        if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_target.columns:
+            df_target = df_target[df_target['ta_clean'] == selected_ta]
+        if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] and 'lb_clean' in df_target.columns:
+            df_target = df_target[df_target['lb_clean'] == selected_lb]
+        if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_target.columns:
+            df_target = df_target[df_target['Jenjang'] == selected_jenjang]
+        if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_target.columns:
+            df_target = df_target[df_target['Kec Tinggal'] == selected_kec]
+        if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_target.columns:
+            df_target = df_target[df_target['Kel Tinggal'] == selected_kel]
+>>>>>>> Stashed changes
 
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
 lb_info = f"Lokasi: {selected_lb}"
@@ -580,7 +779,11 @@ with tab1:
             st.plotly_chart(fig_kat_trx, use_container_width=True)
             st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa.")
     else:
+<<<<<<< Updated upstream
         st.warning("Data Transaksi tidak ditemukan untuk lokasi terpilih.")
+=======
+        st.warning("Data Transaksi tidak ditemukan untuk filter terpilih.")
+>>>>>>> Stashed changes
 
 # --- TAB 2: OVERVIEW DATA SISWA ---
 with tab2:
@@ -619,7 +822,12 @@ with tab2:
                 fig_jalur_pie = style_chart(px.pie(df_jalur, names='Jalur Pendaftaran', values='Jumlah Siswa', hole=0.4, color='Jalur Pendaftaran', color_discrete_map={'Online (Web PSB)': '#00cc96', 'Offline (Cabang / WA)': '#636efa'}))
                 fig_jalur_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
+<<<<<<< Updated upstream
                 st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online vs Offline.")
+=======
+                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online dibandingkan pendaftaran manual langsung di Cabang/WA.")
+
+>>>>>>> Stashed changes
     else:
         st.warning("Data Siswa tidak ditemukan untuk filter terpilih.")
 
@@ -728,6 +936,7 @@ with tab5:
     st.header("📈 Analisis & Komparasi Tren Multi-Tahun Ajaran (Multi-TA)")
     st.info("💡 **Tersinkronisasi:** Seluruh grafik di bawah ini membandingkan tren performa antar Tahun Ajaran berdasarkan Lokasi, Jenjang, dan Domisili terfilter.")
 
+<<<<<<< Updated upstream
     df_s_comp = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
     if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_s_comp.columns:
         df_s_comp = df_s_comp[df_s_comp['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
@@ -742,6 +951,23 @@ with tab5:
 
     if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
         # 1. Jumlah Siswa Lama vs Baru per TA
+=======
+    df_s_comp = df_siswa_raw.copy()
+    if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] and 'lb_clean' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['lb_clean'] == selected_lb]
+    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_s_comp.columns:
+        df_s_comp = df_s_comp[df_s_comp['Jenjang'] == selected_jenjang]
+
+    df_t_comp = df_trx_raw.copy()
+    if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] and 'lb_clean' in df_t_comp.columns:
+        df_t_comp = df_t_comp[df_t_comp['lb_clean'] == selected_lb]
+
+    if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
+        def calculate_delta_df(df_grouped, col_cat, col_val='Jumlah'):
+            df_pivot = df_grouped.pivot(index='ta_clean', columns=col_cat, values=col_val).fillna(0)
+            return df_pivot
+
+>>>>>>> Stashed changes
         st.subheader("1. Jumlah Siswa Lama vs Baru per TA")
         if 'Kategori_Siswa' in df_s_comp.columns:
             g1 = df_s_comp.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah')
@@ -756,13 +982,16 @@ with tab5:
                 st.plotly_chart(fig1_pie, use_container_width=True)
                 st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan rasio akumulasi pendaftar baru dibanding re-enrollment.")
             
+<<<<<<< Updated upstream
             piv1 = g1.pivot(index='ta_clean', columns='Kategori_Siswa', values='Jumlah').fillna(0)
+=======
+            piv1 = calculate_delta_df(g1, 'Kategori_Siswa')
+>>>>>>> Stashed changes
             st.caption("📈 **Tabel Rekapitulasi Perubahan YoY:**")
             st.dataframe(piv1.style.highlight_max(axis=0), use_container_width=True)
 
         st.divider()
 
-        # 2. Komparasi Paket Bimbingan vs Cash In
         st.subheader("2. Komparasi Paket Bimbingan vs Realisasi Cash In per TA")
         g2 = df_s_comp.groupby('ta_clean').agg(Nilai_Paket=('Biaya Paket', 'sum'), Cash_In=('Total Bayar', 'sum')).reset_index()
         g2_melt = g2.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], var_name='Kategori', value_name='Nominal')
@@ -781,7 +1010,10 @@ with tab5:
 
         st.divider()
 
+<<<<<<< Updated upstream
         # 3. Tren Pendapatan Harian Antar TA
+=======
+>>>>>>> Stashed changes
         st.subheader("3. Tren Pendapatan Harian Antar TA")
         if not df_t_comp.empty and 'Tanggal' in df_t_comp.columns:
             df_t_comp['Tanggal'] = pd.to_datetime(df_t_comp['Tanggal'])
@@ -793,7 +1025,10 @@ with tab5:
 
         st.divider()
 
+<<<<<<< Updated upstream
         # 4. Proporsi & Distribusi Metode Pembayaran per TA
+=======
+>>>>>>> Stashed changes
         st.subheader("4. Proporsi & Distribusi Metode Pembayaran per TA")
         if not df_t_comp.empty and 'Type Bayar' in df_t_comp.columns:
             g4 = df_t_comp.groupby(['ta_clean', 'Type Bayar']).size().reset_index(name='Jumlah')
@@ -808,6 +1043,7 @@ with tab5:
                 st.plotly_chart(fig4_pie, use_container_width=True)
                 st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran.")
 
+<<<<<<< Updated upstream
         st.divider()
 
         # 5. Distribusi Jenjang Kelas per TA
@@ -881,6 +1117,8 @@ with tab5:
                 fig9_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig9_pie, use_container_width=True)
                 st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan akumulasi rasio kesehatan pelunasan biaya bimbingan.")
+=======
+>>>>>>> Stashed changes
     else:
         st.warning("Data multi-tahun ajaran tidak ditemukan untuk kombinasi filter yang dipilih.")
 
@@ -928,7 +1166,12 @@ with tab6:
         rekap_kec['% Angsuran'] = (rekap_kec['Angsuran'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
 
         st.dataframe(rekap_kec, use_container_width=True)
+<<<<<<< Updated upstream
         st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan.")
+=======
+        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan. Berguna bagi tim penagihan (*finance*) untuk memprioritaskan area pemukiman dengan persentase angsuran tinggi.")
+
+>>>>>>> Stashed changes
     else:
         st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
 
@@ -938,7 +1181,11 @@ with tab7:
     st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif dengan struktur Memorandum Resmi & Pendekatan 4 Analisis Data (Deskriptif, Diagnostik, Prediktif, & Preskriptif).")
 
     if not df_siswa.empty:
+<<<<<<< Updated upstream
         sender_cabang = f"Tim Cabang {selected_lb}" if not str(selected_lb).startswith("Gabungan") and selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] else f"Tim Gabungan Cabang ({selected_lb})"
+=======
+        sender_cabang = f"Tim Cabang {selected_lb}" if selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] else "Tim Gabungan Cabang (Wilayah Megapolitan Selatan)"
+>>>>>>> Stashed changes
         current_date_str = datetime.now().strftime("%d %B %Y")
 
         st.subheader("📌 1. Smart Executive Summary (Otomatis)")
@@ -1113,6 +1360,7 @@ Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di 
                     st.success(f"""**Jawaban AI:**\n\n{answer}""")
 
     else:
+<<<<<<< Updated upstream
         st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
 
 # ---------------------------------------------------------
@@ -1127,3 +1375,6 @@ st.markdown(
     """,
     unsafe_allow_html=True
 )
+=======
+        st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
+>>>>>>> Stashed changes
