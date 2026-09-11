@@ -1,14 +1,13 @@
 import streamlit as st
-api_key = st.secrets["GCP_API_KEY"]
 import pandas as pd
 import plotly.express as px
 import glob
 import json
 import urllib.request
 import urllib.error
-import html
 import time
 import base64
+import html
 from datetime import datetime
 
 # ---------------------------------------------------------
@@ -20,10 +19,9 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom Styling Adaptive Theme & Button PDF Interaktif
+# Custom Styling Adaptive Theme & Elements
 st.markdown("""
     <style>
-    /* Styling Metric Cards Adaptive Theme */
     div[data-testid="stMetric"] {
         background-color: var(--secondary-background-color) !important;
         padding: 16px !important;
@@ -46,16 +44,12 @@ st.markdown("""
         word-break: break-word !important;
         line-height: 1.25 !important;
     }
-    
-    /* Custom Styling Alert Info Banner Adaptive */
     div[data-testid="stAlert"] {
         background-color: var(--secondary-background-color) !important;
         color: var(--text-color) !important;
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 10px !important;
     }
-
-    /* Custom Styling High-Converting PDF Download Button */
     .btn-download-pdf {
         display: inline-flex;
         align-items: center;
@@ -75,17 +69,162 @@ st.markdown("""
         margin-top: 15px;
         margin-bottom: 15px;
     }
-    .btn-download-pdf:hover {
-        background: linear-gradient(135deg, #FF2B2B 0%, #D80000 100%);
-        transform: translateY(-2px);
-        box-shadow: 0 7px 22px rgba(255, 75, 75, 0.5);
-    }
-    .btn-download-pdf:active {
-        transform: translateY(1px);
-        box-shadow: 0 2px 8px rgba(255, 75, 75, 0.3);
+    .greeting-title {
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: #00CC96;
+        margin-bottom: 10px;
     }
     </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# LOAD DATA ACCESS USER (keyaccess_peg.xlsx)
+# ---------------------------------------------------------
+@st.cache_data(ttl=300)
+def load_pegawai_access():
+    files = glob.glob("*keyaccess_peg*.xlsx") + glob.glob("keyaccess_peg.xlsx")
+    if files:
+        try:
+            df = pd.read_excel(files[0])
+            df['idpeg_str'] = df['idpeg'].apply(lambda x: str(int(x)) if pd.notna(x) and isinstance(x, (int, float)) else str(x).strip())
+            return df
+        except Exception as e:
+            st.error(f"Gagal membaca file keyaccess_peg.xlsx: {e}")
+    return pd.DataFrame()
+
+df_peg_access = load_pegawai_access()
+
+# ---------------------------------------------------------
+# SESSION STATE INITIALIZATION
+# ---------------------------------------------------------
+if 'logged_in' not in st.session_state:
+    st.session_state.logged_in = False
+if 'user_info' not in st.session_state:
+    st.session_state.user_info = None
+if 'show_welcome_toast' not in st.session_state:
+    st.session_state.show_welcome_toast = False
+if 'custom_passwords' not in st.session_state:
+    st.session_state.custom_passwords = {}
+
+# ---------------------------------------------------------
+# DIALOG KONFIRMASI RESET PASSWORD
+# ---------------------------------------------------------
+@st.dialog("Konfirmasi Reset Password")
+def confirm_reset_password_dialog(new_password):
+    st.write("⚠️ **Apakah Anda yakin ingin mereset password?**")
+    st.write("Password lama Anda akan diperbarui dengan password baru yang diinput.")
+    
+    col_d1, col_d2 = st.columns(2)
+    with col_d1:
+        if st.button("Yakin", type="primary", use_container_width=True):
+            user_id = st.session_state.user_info.get('idpeg')
+            st.session_state.custom_passwords[user_id] = new_password
+            st.success("✅ Password berhasil diperbarui!")
+            time.sleep(1.5)
+            st.rerun()
+    with col_d2:
+        if st.button("Batal", use_container_width=True):
+            st.rerun()
+
+# ---------------------------------------------------------
+# HALAMAN LOGIN UTAMA
+# ---------------------------------------------------------
+if not st.session_state.logged_in:
+    st.markdown("<h2 style='text-align: center;'>🔐 Login Pegawai BKB Nurul Fikri</h2>", unsafe_allow_html=True)
+    st.markdown("<p style='text-align: center; color: gray;'>Evidence-Based Policy Tool - Wilayah Megapolitan Selatan</p>", unsafe_allow_html=True)
+    
+    c_log1, c_log2, c_log3 = st.columns([1, 1.8, 1])
+    with c_log2:
+        with st.form("form_login"):
+            input_idpeg = st.text_input("ID Pegawai (idpeg):", placeholder="Masukkan ID Pegawai Anda")
+            input_password = st.text_input("Password:", type="password", placeholder="Password standar: 12345678")
+            btn_login = st.form_submit_button("Submit Login", type="primary", use_container_width=True)
+            
+            if btn_login:
+                clean_id = input_idpeg.strip()
+                valid_pass = st.session_state.custom_passwords.get(clean_id, "12345678")
+                
+                if not df_peg_access.empty:
+                    user_match = df_peg_access[df_peg_access['idpeg_str'] == clean_id]
+                    if not user_match.empty and input_password == valid_pass:
+                        user_data = user_match.iloc[0].to_dict()
+                        st.session_state.logged_in = True
+                        st.session_state.user_info = user_data
+                        st.session_state.show_welcome_toast = True
+                        st.rerun()
+                    else:
+                        st.error("❌ ID Pegawai atau Password salah!")
+                else:
+                    if input_idpeg == "admin" and input_password == valid_pass:
+                        st.session_state.logged_in = True
+                        st.session_state.user_info = {
+                            'nama_peg': 'Admin Sistem',
+                            'titel': 'ADMIN WILAYAH',
+                            'lokasi_belajar': 'Semua',
+                            'area': 'Megapolitan Selatan',
+                            'idpeg': 'admin'
+                        }
+                        st.session_state.show_welcome_toast = True
+                        st.rerun()
+                    else:
+                        st.error("❌ File keyaccess_peg.xlsx tidak ditemukan.")
+    
+    # Footer Copyright pada Halaman Login
+    st.markdown(
+        """
+        <hr style="margin-top: 50px; margin-bottom: 20px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);">
+        <div style="text-align: center; color: gray; font-size: 0.85rem; padding-bottom: 20px;">
+            Copyright © 2026 PT. Indonesia Juara Semesta. All Rights Reserved. Dikembangkan oleh Ade Dimas Shirotuddin.
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+# ---------------------------------------------------------
+# LOGIKA POP-UP WELCOME (3 DETIK)
+# ---------------------------------------------------------
+user = st.session_state.user_info
+nama_peg = user.get('nama_peg', 'Pegawai')
+titel_peg = str(user.get('titel', '')).upper()
+area_peg = str(user.get('area', ''))
+lb_peg_raw = str(user.get('lokasi_belajar', ''))
+
+if st.session_state.show_welcome_toast:
+    welcome_msg = f"Ahlan wa sahlan wa marhaban Kak {nama_peg}, selamat datang di Nurul Fikri Evidence-Based Policy Tool"
+    toast_box = st.empty()
+    toast_box.success(f"🎉 **{welcome_msg}**")
+    time.sleep(3)
+    toast_box.empty()
+    st.session_state.show_welcome_toast = False
+
+# ---------------------------------------------------------
+# MODUL RESET PASSWORD
+# ---------------------------------------------------------
+col_top_left, col_top_right = st.columns([1.5, 3])
+with col_top_left:
+    with st.popover("🔑 Reset Password Pegawai"):
+        st.subheader("⚙️ Reset Password")
+        st.caption("Batas maksimal 25 karakter (kombinasi huruf, angka, & simbol).")
+        new_pass_input = st.text_input("Password Baru:", type="password", key="reset_new_pass")
+        
+        if st.button("Submit Reset", type="primary", use_container_width=True):
+            if not new_pass_input:
+                st.warning("⚠️ Password baru tidak boleh kosong.")
+            elif len(new_pass_input) > 25:
+                st.error("❌ Panjang password melebihi batas maksimal (Maks. 25 Karakter).")
+            else:
+                confirm_reset_password_dialog(new_pass_input)
+
+with col_top_right:
+    st.write(f"👤 **Login sebagai:** {nama_peg} ({titel_peg}) | **Area:** {area_peg}")
+    if st.button("Logout", key="btn_logout"):
+        st.session_state.logged_in = False
+        st.session_state.user_info = None
+        st.rerun()
+
+st.divider()
 
 # ---------------------------------------------------------
 # MAPPING KODE CABANG & JENJANG
@@ -97,25 +236,13 @@ LOCATION_MAP = {
 }
 
 JENJANG_MAP = {
-    'F': '4 SD',
-    'G': '5 SD',
-    'H': '6 SD',
-    'I': '7 SMP',
-    'J': '8 SMP',
-    'K': '9 SMP',
-    'L': '10 SMA',
-    'M': '11 SMA',
-    'N': '12 SMA',
-    'O': 'RONIN'
+    'F': '4 SD', 'G': '5 SD', 'H': '6 SD',
+    'I': '7 SMP', 'J': '8 SMP', 'K': '9 SMP',
+    'L': '10 SMA', 'M': '11 SMA', 'N': '12 SMA', 'O': 'RONIN'
 }
 
-JENJANG_ORDER = [
-    '4 SD', '5 SD', '6 SD',
-    '7 SMP', '8 SMP', '9 SMP',
-    '10 SMA', '11 SMA', '12 SMA', 'RONIN'
-]
+JENJANG_ORDER = ['4 SD', '5 SD', '6 SD', '7 SMP', '8 SMP', '9 SMP', '10 SMA', '11 SMA', '12 SMA', 'RONIN']
 
-# Helper Function Plotly Transparent
 def style_chart(fig):
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -124,7 +251,6 @@ def style_chart(fig):
     )
     return fig
 
-# Helper Function Pendaftaran Online vs Offline dari kolom 'Cara Daftar'
 def get_jalur_pendaftaran_from_cara_daftar(val):
     if pd.isna(val):
         return 'Offline (Cabang / WA)'
@@ -133,35 +259,25 @@ def get_jalur_pendaftaran_from_cara_daftar(val):
         return 'Online (Web PSB)'
     return 'Offline (Cabang / WA)'
 
-# Helper Function Deteksi Diskon Juara/PSJ dari Kolom Catatan
 def extract_diskon_juara_from_catatan(catatan_val):
     if pd.isna(catatan_val):
         return None
     cat_str = str(catatan_val).strip().upper()
-    
     if 'JUARA' in cat_str or 'PSJ' in cat_str:
         has_formulir = 'FORM' in cat_str or 'FORMULIR' in cat_str
         has_angsuran = 'ANGSUR' in cat_str or 'ANGS' in cat_str or 'CICIL' in cat_str
-        
         if has_formulir and has_angsuran:
             return 'Juara (Formulir + Angsuran 1)'
-            
         return 'Diskon Juara / PSJ'
-        
     return None
 
-# ---------------------------------------------------------
-# HELPER GEMINI AI DENGAN AUTOMATIC RETRY (PENANGANAN HTTP 503)
-# ---------------------------------------------------------
 def ask_gemini_ai(api_key, prompt_text, max_retries=3):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
-        
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
-    
     for attempt in range(max_retries):
         try:
             data_json = json.dumps(payload).encode('utf-8')
@@ -176,57 +292,12 @@ def ask_gemini_ai(api_key, prompt_text, max_retries=3):
             try:
                 raw_err = e.read().decode('utf-8')
                 err_json = json.loads(raw_err)
-                detail_msg = err_json.get('error', {}).get('message', raw_err)
-                return f"⚠️ **Respon Server Google (HTTP {e.code}):** {detail_msg}"
+                return f"⚠️ **Respon Server Google (HTTP {e.code}):** {err_json.get('error', {}).get('message', raw_err)}"
             except Exception:
                 return f"⚠️ **Gagal terhubung:** HTTP Error {e.code}"
         except Exception as e:
             return f"⚠️ **Gagal terhubung ke Gemini AI API:** {str(e)}"
 
-# ---------------------------------------------------------
-# HEADER UTAMA & AKSES ADMIN POP-UP
-# ---------------------------------------------------------
-if 'admin_logged_in' not in st.session_state:
-    st.session_state.admin_logged_in = False
-
-files_trx = None
-files_siswa = None
-files_diskon = None
-
-col_head1, col_head2 = st.columns([3.5, 1.2])
-
-with col_head1:
-    st.title("📊 Executive Dashboard & Analisis Multi-Tahun Ajaran")
-    st.caption("Aplikasi Analisis Keuangan, Pendaftaran Siswa, Demografi, Diskon, & Status Bayar Domisili")
-
-with col_head2:
-    st.write("") 
-    if not st.session_state.admin_logged_in:
-        with st.popover("🔑 Login Admin / Upload", use_container_width=True):
-            st.subheader("🔑 Akses Admin")
-            input_user = st.text_input("Username", key="login_user")
-            input_pass = st.text_input("Password", type="password", key="login_pass")
-            if st.button("Login", use_container_width=True):
-                if input_user == "staf612120" and input_pass == "nfms2026%":
-                    st.session_state.admin_logged_in = True
-                    st.success("Login Berhasil!")
-                    st.rerun()
-                else:
-                    st.error("Username atau Password Salah!")
-    else:
-        with st.popover("🔓 Admin Mode (Aktif)", use_container_width=True):
-            st.success("🔓 Mode Admin Aktif")
-            if st.button("Logout Admin", use_container_width=True):
-                st.session_state.admin_logged_in = False
-                st.rerun()
-
-            st.divider()
-            st.subheader("📤 Upload File Excel Baru")
-            files_trx = st.file_uploader("1. Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-            files_siswa = st.file_uploader("2. Data Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-            files_diskon = st.file_uploader("3. Data Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
-
-# Helper Function Pembersihan Data
 def clean_str(val):
     if pd.isna(val):
         return None
@@ -264,10 +335,8 @@ def get_kategori_siswa(biaya):
 def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
         return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
-    
     all_excel_files = glob.glob("*.xlsx")
-    matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords)]
-    
+    matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords) and 'keyaccess' not in f.lower()]
     if matched_files:
         dfs = []
         for mf in matched_files:
@@ -279,14 +348,10 @@ def load_combined_data(uploaded_files, filename_keywords):
             return pd.concat(dfs, ignore_index=True)
     return pd.DataFrame()
 
-# ---------------------------------------------------------
-# LOAD & COMBINE DATASETS
-# ---------------------------------------------------------
-df_trx_raw = load_combined_data(files_trx, ["trx", "laporan", "transaksi"])
-df_siswa_raw = load_combined_data(files_siswa, ["siswa", "siswanf"])
-df_diskon_raw = load_combined_data(files_diskon, ["diskon"])
+df_trx_raw = load_combined_data(None, ["trx", "laporan", "transaksi"])
+df_siswa_raw = load_combined_data(None, ["siswa", "siswanf"])
+df_diskon_raw = load_combined_data(None, ["diskon"])
 
-# Olah Data Transaksi
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
         df_trx_raw['lb_clean'] = df_trx_raw['Lb'].apply(format_lb)
@@ -297,7 +362,6 @@ if not df_trx_raw.empty:
     if 'Jenjang' in df_trx_raw.columns:
         df_trx_raw['Jenjang'] = df_trx_raw['Jenjang'].apply(format_jenjang)
 
-# Olah Data Siswa
 if not df_siswa_raw.empty:
     if 'lb' in df_siswa_raw.columns:
         df_siswa_raw['lb_clean'] = df_siswa_raw['lb'].apply(format_lb)
@@ -307,26 +371,14 @@ if not df_siswa_raw.empty:
         df_siswa_raw['Kategori_Siswa'] = df_siswa_raw['Biaya Formulir'].apply(get_kategori_siswa)
     if 'Jenjang' in df_siswa_raw.columns:
         df_siswa_raw['Jenjang'] = df_siswa_raw['Jenjang'].apply(format_jenjang)
-        
-    col_cara_daftar = None
-    for c in df_siswa_raw.columns:
-        c_clean = str(c).lower().replace(' ', '').replace('_', '')
-        if 'caradaftar' in c_clean or 'caradaft' in c_clean:
-            col_cara_daftar = c
-            break
-            
+    
+    col_cara_daftar = next((c for c in df_siswa_raw.columns if 'caradaftar' in str(c).lower().replace(' ', '').replace('_', '')), None)
     if col_cara_daftar:
         df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[col_cara_daftar].apply(get_jalur_pendaftaran_from_cara_daftar)
     else:
-        alt_col = next((c for c in df_siswa_raw.columns if 'daftar' in str(c).lower() or 'cara' in str(c).lower()), None)
-        if alt_col:
-            df_siswa_raw['Jalur_Daftar'] = df_siswa_raw[alt_col].apply(get_jalur_pendaftaran_from_cara_daftar)
-        else:
-            df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
+        df_siswa_raw['Jalur_Daftar'] = 'Offline (Cabang / WA)'
 
-# EKSTRAKSI DATA DISKON
 list_diskon_records = []
-
 if not df_diskon_raw.empty:
     col_form_d = next((c for c in df_diskon_raw.columns if 'nomor' in str(c).lower() and 'form' in str(c).lower()), 'Nomor Formulir')
     col_kwt_d = next((c for c in df_diskon_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
@@ -334,16 +386,13 @@ if not df_diskon_raw.empty:
     col_besar_d = next((c for c in df_diskon_raw.columns if 'besar' in str(c).lower() or 'nominal' in str(c).lower()), 'Besar Diskon')
 
     for _, row in df_diskon_raw.iterrows():
-        raw_val = row.get(col_besar_d)
         try:
-            val_diskon = float(pd.to_numeric(raw_val, errors='coerce'))
+            val_diskon = float(pd.to_numeric(row.get(col_besar_d), errors='coerce'))
             val_diskon = 0.0 if pd.isna(val_diskon) else val_diskon
         except:
             val_diskon = 0.0
-
         raw_nama = str(row.get(col_nama_d)).strip() if pd.notna(row.get(col_nama_d)) else 'Diskon Khusus'
         nama_diskon_clean = extract_diskon_juara_from_catatan(raw_nama) or raw_nama
-
         list_diskon_records.append({
             'Nomor Formulir': clean_str(row.get(col_form_d)),
             'Kwitansi': clean_str(row.get(col_kwt_d)),
@@ -352,99 +401,64 @@ if not df_diskon_raw.empty:
             'Sumber': 'File Diskon'
         })
 
-if not df_siswa_raw.empty:
-    col_cat_s = next((c for c in df_siswa_raw.columns if 'catatan' in str(c).lower()), None)
-    col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
-    col_kwt_s = next((c for c in df_siswa_raw.columns if 'kwi' in str(c).lower() or 'kwt' in str(c).lower()), 'Kwitansi')
-
-    if col_cat_s:
-        for _, row in df_siswa_raw.iterrows():
-            jenis_diskon_cat = extract_diskon_juara_from_catatan(row.get(col_cat_s))
-            if jenis_diskon_cat:
-                list_diskon_records.append({
-                    'Nomor Formulir': clean_str(row.get(col_form_s)),
-                    'Kwitansi': clean_str(row.get(col_kwt_s)),
-                    'Nama Diskon': jenis_diskon_cat,
-                    'Besar Diskon': 0.0,
-                    'Sumber': 'Catatan Siswa'
-                })
-
-if not df_trx_raw.empty:
-    col_cat_t = next((c for c in df_trx_raw.columns if 'catatan' in str(c).lower()), None)
-    col_form_t = next((c for c in df_trx_raw.columns if 'nomor f' in str(c).lower() or 'form' in str(c).lower()), 'Nomor F')
-    col_kwt_t = next((c for c in df_trx_raw.columns if 'nokwt' in str(c).lower() or 'kwt' in str(c).lower()), 'Nokwt')
-
-    if col_cat_t:
-        for _, row in df_trx_raw.iterrows():
-            jenis_diskon_cat = extract_diskon_juara_from_catatan(row.get(col_cat_t))
-            if jenis_diskon_cat:
-                list_diskon_records.append({
-                    'Nomor Formulir': clean_str(row.get(col_form_t)),
-                    'Kwitansi': clean_str(row.get(col_kwt_t)),
-                    'Nama Diskon': jenis_diskon_cat,
-                    'Besar Diskon': 0.0,
-                    'Sumber': 'Catatan Transaksi'
-                })
-
 df_diskon_combined = pd.DataFrame(list_diskon_records)
-
 if not df_diskon_combined.empty:
     df_diskon_combined = df_diskon_combined.drop_duplicates(subset=['Nomor Formulir', 'Kwitansi', 'Nama Diskon'])
-    
     if not df_siswa_raw.empty:
         col_form_s = next((c for c in df_siswa_raw.columns if 'form' in str(c).lower()), 'Formulir')
         df_siswa_meta = df_siswa_raw.copy()
         df_siswa_meta['f_clean'] = df_siswa_meta[col_form_s].apply(clean_str) if col_form_s in df_siswa_meta.columns else None
-        
         meta_cols = ['ta_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal', 'lb_clean']
         meta_cols = [c for c in meta_cols if c in df_siswa_meta.columns]
-        
         if 'f_clean' in df_siswa_meta.columns:
             map_siswa_f = df_siswa_meta.dropna(subset=['f_clean']).drop_duplicates(subset=['f_clean']).set_index('f_clean')[meta_cols]
             for col in meta_cols:
                 df_diskon_combined[col] = df_diskon_combined['Nomor Formulir'].map(map_siswa_f[col])
 
-    if not df_trx_raw.empty:
-        col_form_t = next((c for c in df_trx_raw.columns if 'nomor f' in str(c).lower() or 'form' in str(c).lower()), 'Nomor F')
-        df_trx_meta = df_trx_raw.copy()
-        df_trx_meta['f_clean'] = df_trx_meta[col_form_t].apply(clean_str) if col_form_t in df_trx_meta.columns else None
-
-        meta_cols_t = ['ta_clean', 'Jenjang', 'lb_clean']
-        meta_cols_t = [c for c in meta_cols_t if c in df_trx_meta.columns]
-
-        if 'f_clean' in df_trx_meta.columns:
-            map_trx_f = df_trx_meta.dropna(subset=['f_clean']).drop_duplicates(subset=['f_clean']).set_index('f_clean')[meta_cols_t]
-            for col in meta_cols_t:
-                if col in df_diskon_combined.columns:
-                    df_diskon_combined[col] = df_diskon_combined[col].fillna(df_diskon_combined['Nomor Formulir'].map(map_trx_f[col]))
-                else:
-                    df_diskon_combined[col] = df_diskon_combined['Nomor Formulir'].map(map_trx_f[col])
-
 df_diskon_raw = df_diskon_combined.copy()
 
 # ---------------------------------------------------------
-# MASTER FILTER (5 FILTER AKTIF)
+# HAK AKSES DAN FILTERING BERTINGKAT (ROLE-BASED FILTER)
 # ---------------------------------------------------------
-st.divider()
-
-all_ta_set = set()
-if 'ta_clean' in df_trx_raw.columns:
-    all_ta_set.update(df_trx_raw['ta_clean'].dropna())
-if 'ta_clean' in df_siswa_raw.columns:
-    all_ta_set.update(df_siswa_raw['ta_clean'].dropna())
-if 'ta_clean' in df_diskon_raw.columns:
-    all_ta_set.update(df_diskon_raw['ta_clean'].dropna())
-list_master_ta = ["Semua Tahun Ajaran"] + sorted(list(all_ta_set))
+st.markdown(f"<div class='greeting-title'>Assalamu'alaikum Kak {nama_peg}</div>", unsafe_allow_html=True)
 
 all_lb_set = set()
-if 'lb_clean' in df_trx_raw.columns:
-    all_lb_set.update(df_trx_raw['lb_clean'].dropna())
-if 'lb_clean' in df_siswa_raw.columns:
-    all_lb_set.update(df_siswa_raw['lb_clean'].dropna())
-if 'lb_clean' in df_diskon_raw.columns:
-    all_lb_set.update(df_diskon_raw['lb_clean'].dropna())
-list_master_lb = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
+for df_temp in [df_trx_raw, df_siswa_raw, df_diskon_raw]:
+    if not df_temp.empty and 'lb_clean' in df_temp.columns:
+        all_lb_set.update(df_temp['lb_clean'].dropna().unique())
 
+user_lbs = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
+allowed_lb_options = []
+
+if titel_peg in ["SRO", "JRO", "ZT PLUS"]:
+    if len(user_lbs) > 1:
+        label_gabungan = f"Gabungan Lokasi Bertugas ({' & '.join(sorted(user_lbs))})"
+        allowed_lb_options = [label_gabungan] + sorted(user_lbs)
+    elif len(user_lbs) == 1:
+        allowed_lb_options = sorted(user_lbs)
+    else:
+        allowed_lb_options = sorted(list(all_lb_set))
+elif titel_peg == "MANAJER AREA":
+    if not df_peg_access.empty and 'area' in df_peg_access.columns:
+        area_lbs = df_peg_access[df_peg_access['area'].fillna('').astype(str).str.upper() == area_peg.upper()]['lokasi_belajar'].dropna().tolist()
+        parsed_area_lbs = []
+        for alb in area_lbs:
+            parsed_area_lbs.extend([x.strip() for x in str(alb).split(',') if x.strip()])
+        parsed_area_lbs = sorted(list(set(parsed_area_lbs)))
+        if len(parsed_area_lbs) > 1:
+            allowed_lb_options = [f"Gabungan Area {area_peg}"] + parsed_area_lbs
+        else:
+            allowed_lb_options = parsed_area_lbs
+    else:
+        allowed_lb_options = ["Semua Cabang / Lokasi"] + sorted(list(all_lb_set))
+else:
+    allowed_lb_options = ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] + sorted(list(all_lb_set))
+
+all_ta_set = set()
+for df_temp in [df_trx_raw, df_siswa_raw, df_diskon_raw]:
+    if not df_temp.empty and 'ta_clean' in df_temp.columns:
+        all_ta_set.update(df_temp['ta_clean'].dropna().unique())
+list_master_ta = ["Semua Tahun Ajaran"] + sorted(list(all_ta_set))
 list_master_jenjang = ["Semua Jenjang"] + JENJANG_ORDER
 
 f_col1, f_col2, f_col3, f_col4, f_col5 = st.columns(5)
@@ -453,14 +467,26 @@ with f_col1:
     selected_ta = st.selectbox("📅 Tahun Ajaran (TA):", list_master_ta)
 
 with f_col2:
-    selected_lb = st.selectbox("🏢 Lokasi Belajar:", list_master_lb)
+    selected_lb = st.selectbox("🏢 Lokasi Belajar:", allowed_lb_options)
 
 with f_col3:
     selected_jenjang = st.selectbox("🎓 Jenjang Kelas:", list_master_jenjang)
 
-df_kec_source = df_siswa_raw.copy()
-if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_kec_source.columns:
-    df_kec_source = df_kec_source[df_kec_source['lb_clean'] == selected_lb]
+def filter_dataframe_location(df_in, lb_selected, user_locations):
+    if df_in.empty or 'lb_clean' not in df_in.columns:
+        return df_in
+    
+    col_lb_upper = df_in['lb_clean'].fillna('').astype(str).str.upper()
+    
+    if lb_selected in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"]:
+        return df_in
+    elif str(lb_selected).startswith("Gabungan"):
+        target_locs_upper = [x.upper() for x in user_locations]
+        return df_in[col_lb_upper.isin(target_locs_upper)]
+    else:
+        return df_in[col_lb_upper == str(lb_selected).upper()]
+
+df_kec_source = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
 
 list_kec = ["Semua Kecamatan"]
 if not df_kec_source.empty and 'Kec Tinggal' in df_kec_source.columns:
@@ -471,10 +497,8 @@ with f_col4:
 
 list_kel = ["Semua Kelurahan"]
 if selected_kec != "Semua Kecamatan" and not df_kec_source.empty:
-    sub_kel = df_kec_source[df_kec_source['Kec Tinggal'] == selected_kec]['Kel Tinggal'].dropna().unique()
+    sub_kel = df_kec_source[df_kec_source['Kec Tinggal'].fillna('').astype(str).str.upper() == selected_kec.upper()]['Kel Tinggal'].dropna().unique()
     list_kel += sorted([str(x) for x in sub_kel])
-elif not df_kec_source.empty and 'Kel Tinggal' in df_kec_source.columns:
-    list_kel += sorted([str(x) for x in df_kec_source['Kel Tinggal'].dropna().unique()])
 
 with f_col5:
     selected_kel = st.selectbox("🏠 Kelurahan:", list_kel)
@@ -482,52 +506,31 @@ with f_col5:
 # ---------------------------------------------------------
 # APLIKASI FILTER KE SEMUA DATAFRAME
 # ---------------------------------------------------------
-df_trx = df_trx_raw.copy()
-if not df_trx.empty:
-    if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_trx.columns:
-        df_trx = df_trx[df_trx['ta_clean'] == selected_ta]
-    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_trx.columns:
-        df_trx = df_trx[df_trx['lb_clean'] == selected_lb]
-    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_trx.columns:
-        df_trx = df_trx[df_trx['Jenjang'] == selected_jenjang]
+df_trx = filter_dataframe_location(df_trx_raw, selected_lb, user_lbs)
+df_siswa = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
+df_diskon = filter_dataframe_location(df_diskon_raw, selected_lb, user_lbs)
 
-df_siswa = df_siswa_raw.copy()
-if not df_siswa.empty:
-    if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_siswa.columns:
-        df_siswa = df_siswa[df_siswa['ta_clean'] == selected_ta]
-    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_siswa.columns:
-        df_siswa = df_siswa[df_siswa['lb_clean'] == selected_lb]
-    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_siswa.columns:
-        df_siswa = df_siswa[df_siswa['Jenjang'] == selected_jenjang]
-    if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_siswa.columns:
-        df_siswa = df_siswa[df_siswa['Kec Tinggal'] == selected_kec]
-    if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_siswa.columns:
-        df_siswa = df_siswa[df_siswa['Kel Tinggal'] == selected_kel]
-
-df_diskon = df_diskon_raw.copy()
-if not df_diskon.empty:
-    if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['ta_clean'] == selected_ta]
-    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['lb_clean'] == selected_lb]
-    if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['Jenjang'] == selected_jenjang]
-    if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['Kec Tinggal'] == selected_kec]
-    if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_diskon.columns:
-        df_diskon = df_diskon[df_diskon['Kel Tinggal'] == selected_kel]
+for name, df_obj in [('trx', df_trx), ('siswa', df_siswa), ('diskon', df_diskon)]:
+    if not df_obj.empty:
+        if selected_ta != "Semua Tahun Ajaran" and 'ta_clean' in df_obj.columns:
+            df_obj = df_obj[df_obj['ta_clean'].fillna('').astype(str).str.upper() == selected_ta.upper()]
+        if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_obj.columns:
+            df_obj = df_obj[df_obj['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
+        if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_obj.columns:
+            df_obj = df_obj[df_obj['Kec Tinggal'].fillna('').astype(str).str.upper() == selected_kec.upper()]
+        if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_obj.columns:
+            df_obj = df_obj[df_obj['Kel Tinggal'].fillna('').astype(str).str.upper() == selected_kel.upper()]
+        if name == 'trx': df_trx = df_obj
+        elif name == 'siswa': df_siswa = df_obj
+        elif name == 'diskon': df_diskon = df_obj
 
 ta_info = f"TA {selected_ta}" if selected_ta != "Semua Tahun Ajaran" else "Semua TA"
-lb_info = f"Lokasi: {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Semua Lokasi Belajar"
-jj_info = f" | Jenjang: {selected_jenjang}" if selected_jenjang != "Semua Jenjang" else ""
-dom_info = f" | {selected_kec}" if selected_kec != "Semua Kecamatan" else ""
-if selected_kel != "Semua Kelurahan":
-    dom_info += f" ({selected_kel})"
+lb_info = f"Lokasi: {selected_lb}"
 
-st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**{jj_info}{dom_info}")
+st.info(f"📌 **Filter Aktif:** Menampilkan data **{ta_info}** | **{lb_info}**")
 
 # ---------------------------------------------------------
-# TABS LAYOUT DASHBOARD
+# DASHBOARD TABS
 # ---------------------------------------------------------
 tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs([
     "💰 Keuangan Transaksi", 
@@ -557,23 +560,15 @@ with tab1:
             daily_trx = df_trx.groupby('Tanggal')['Jumlah'].sum().reset_index()
             fig_line = style_chart(px.line(daily_trx, x='Tanggal', y='Jumlah', markers=True))
             st.plotly_chart(fig_line, use_container_width=True)
-            st.caption("📝 **Penjelasan Grafik:** Grafik garis di atas menggambarkan fluktuasi nominal pendapatan harian. Titik puncak menandakan tanggal dengan volume transaksi keuangan tertinggi pada periode terfilter.")
+            st.caption("📝 **Penjelasan Grafik:** Grafik garis di atas menggambarkan fluktuasi nominal pendapatan harian pada lokasi/gabungan lokasi terpilih.")
 
         with c2:
             st.subheader("Proporsi Metode Pembayaran")
             df_pie_summary = df_trx.groupby('Type Bayar').size().reset_index(name='Jumlah_Siswa')
-            fig_pie = style_chart(px.pie(
-                df_pie_summary, 
-                names='Type Bayar', 
-                values='Jumlah_Siswa', 
-                hole=0.4
-            ))
-            fig_pie.update_traces(
-                textinfo='value+percent', 
-                texttemplate='%{value} siswa<br>(%{percent})'
-            )
+            fig_pie = style_chart(px.pie(df_pie_summary, names='Type Bayar', values='Jumlah_Siswa', hole=0.4))
+            fig_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
             st.plotly_chart(fig_pie, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Diagram donat di atas memperlihatkan persentase dan frekuensi penggunaan jenis metode pembayaran (Cash, Transfer, Debit, Virtual Account) yang digunakan oleh wali siswa.")
+            st.caption("📝 **Penjelasan Diagram:** Diagram donat di atas memperlihatkan persentase metode pembayaran pada lokasi terfilter.")
 
         st.divider()
 
@@ -581,15 +576,11 @@ with tab1:
             st.subheader("Distribusi Status Siswa (Siswa Baru / Lama / NFIC)")
             kat_trx_df = df_trx['Kategori_Siswa'].value_counts().reset_index()
             kat_trx_df.columns = ['Status Siswa', 'Jumlah Transaksi']
-            fig_kat_trx = style_chart(px.bar(
-                kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi',
-                color='Status Siswa'
-            ))
+            fig_kat_trx = style_chart(px.bar(kat_trx_df, x='Status Siswa', y='Jumlah Transaksi', text='Jumlah Transaksi', color='Status Siswa'))
             st.plotly_chart(fig_kat_trx, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa (Siswa Baru Rp300k, Siswa Lama Rp50k, atau NFIC Rp200k).")
-
+            st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa.")
     else:
-        st.warning(f"Data Transaksi tidak ditemukan untuk filter terpilih.")
+        st.warning("Data Transaksi tidak ditemukan untuk lokasi terpilih.")
 
 # --- TAB 2: OVERVIEW DATA SISWA ---
 with tab2:
@@ -608,12 +599,9 @@ with tab2:
             if 'Kategori_Siswa' in df_siswa.columns:
                 kat_siswa_df = df_siswa['Kategori_Siswa'].value_counts().reset_index()
                 kat_siswa_df.columns = ['Status Siswa', 'Jumlah']
-                fig_kat_siswa = style_chart(px.bar(
-                    kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah',
-                    color='Status Siswa'
-                ))
+                fig_kat_siswa = style_chart(px.bar(kat_siswa_df, x='Status Siswa', y='Jumlah', text='Jumlah', color='Status Siswa'))
                 st.plotly_chart(fig_kat_siswa, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram:** Menunjukkan komposisi kuantitas pendaftar terfilter berdasarkan kategori pendaftar (Baru vs Re-enrollment/Lama).")
+                st.caption("📝 **Penjelasan Diagram:** Menunjukkan komposisi kuantitas pendaftar terfilter berdasarkan kategori pendaftar.")
 
         with c2:
             st.subheader("Distribusi Jenjang Kelas")
@@ -621,38 +609,19 @@ with tab2:
             jenjang_df.columns = ['Jenjang', 'Jumlah']
             fig_jenjang = style_chart(px.bar(jenjang_df, x='Jenjang', y='Jumlah', color='Jumlah'))
             st.plotly_chart(fig_jenjang, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Menggambarkan tingkat kepadatan jumlah siswa aktif pada masing-masing tingkatan kelas (SD, SMP, SMA, & RONIN).")
+            st.caption("📝 **Penjelasan Diagram:** Menggambarkan tingkat kepadatan jumlah siswa aktif pada masing-masing tingkatan kelas.")
 
         with c3:
             st.subheader("Proporsi Pendaftaran Online vs Offline")
             if 'Jalur_Daftar' in df_siswa.columns:
                 df_jalur = df_siswa['Jalur_Daftar'].value_counts().reset_index()
                 df_jalur.columns = ['Jalur Pendaftaran', 'Jumlah Siswa']
-                
-                fig_jalur_pie = style_chart(px.pie(
-                    df_jalur,
-                    names='Jalur Pendaftaran',
-                    values='Jumlah Siswa',
-                    hole=0.4,
-                    color='Jalur Pendaftaran',
-                    color_discrete_map={
-                        'Online (Web PSB)': '#00cc96',
-                        'Offline (Cabang / WA)': '#636efa'
-                    }
-                ))
-                
-                fig_jalur_pie.update_traces(
-                    textinfo='value+percent',
-                    texttemplate='%{value} siswa<br>(%{percent})'
-                )
-                
+                fig_jalur_pie = style_chart(px.pie(df_jalur, names='Jalur Pendaftaran', values='Jumlah Siswa', hole=0.4, color='Jalur Pendaftaran', color_discrete_map={'Online (Web PSB)': '#00cc96', 'Offline (Cabang / WA)': '#636efa'}))
+                fig_jalur_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online dibandingkan pendaftaran manual langsung di Cabang/WA.")
-            else:
-                st.warning("Kolom 'Cara Daftar' tidak ditemukan pada file Data Siswa.")
-
+                st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online vs Offline.")
     else:
-        st.warning(f"Data Siswa tidak ditemukan untuk filter terpilih.")
+        st.warning("Data Siswa tidak ditemukan untuk filter terpilih.")
 
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
@@ -663,13 +632,10 @@ with tab3:
         with c1:
             top_sekolah = df_siswa['Asal Sekolah'].value_counts().head(10).reset_index()
             top_sekolah.columns = ['Asal Sekolah', 'Jumlah Siswa']
-            fig_sekolah = style_chart(px.bar(
-                top_sekolah, y='Asal Sekolah', x='Jumlah Siswa', orientation='h', 
-                text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis'
-            ))
+            fig_sekolah = style_chart(px.bar(top_sekolah, y='Asal Sekolah', x='Jumlah Siswa', orientation='h', text='Jumlah Siswa', color='Jumlah Siswa', color_continuous_scale='Viridis'))
             fig_sekolah.update_layout(yaxis={'categoryorder':'total ascending'})
             st.plotly_chart(fig_sekolah, use_container_width=True)
-            st.caption("📝 **Penjelasan Bagan Horisontal:** Peringkat 10 sekolah penyumbang pendaftar terbanyak. Menjadi prioritas utama dalam kegiatan sosialisasi & pameran pendidikan.")
+            st.caption("📝 **Penjelasan Bagan Horisontal:** Peringkat 10 sekolah penyumbang pendaftar terbanyak.")
 
         with c2:
             st.write("📊 **Detail Sebaran Sekolah & Lokasi Belajar**")
@@ -677,7 +643,7 @@ with tab3:
             sekolah_lb.columns = ['Asal Sekolah', 'Lokasi Belajar', 'Jumlah Siswa']
             sekolah_lb = sekolah_lb.sort_values(by='Jumlah Siswa', ascending=False)
             st.dataframe(sekolah_lb, use_container_width=True, height=350)
-            st.caption("📝 **Penjelasan Tabel:** Rincian kuantitatif distribusi pendaftar asal sekolah tertentu ke cabang/lokasi belajar yang dipilih.")
+            st.caption("📝 **Penjelasan Tabel:** Rincian kuantitatif distribusi pendaftar asal sekolah tertentu ke cabang lokasi belajar.")
 
         st.divider()
 
@@ -688,18 +654,10 @@ with tab3:
             jenjang_kec['Persentase'] = (jenjang_kec['Jumlah_Siswa'] / total_kec * 100).round(1)
             jenjang_kec['Label_Text'] = jenjang_kec.apply(lambda r: f"{r['Jumlah_Siswa']} ({r['Persentase']}%)", axis=1)
 
-            fig_jenjang_kec = style_chart(px.bar(
-                jenjang_kec,
-                x='Kec Tinggal',
-                y='Jumlah_Siswa',
-                color='Jenjang',
-                barmode='group',
-                text='Label_Text',
-                labels={'Kec Tinggal': 'Kecamatan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}
-            ))
+            fig_jenjang_kec = style_chart(px.bar(jenjang_kec, x='Kec Tinggal', y='Jumlah_Siswa', color='Jenjang', barmode='group', text='Label_Text', labels={'Kec Tinggal': 'Kecamatan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}))
             fig_jenjang_kec.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kec, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Grouped Bar:** Menampilkan persebaran jenjang pendidikan siswa di setiap wilayah Kecamatan domisili beserta kontribusi persentasenya.")
+            st.caption("📝 **Penjelasan Diagram Grouped Bar:** Menampilkan persebaran jenjang pendidikan siswa di setiap wilayah Kecamatan domisili.")
 
         st.divider()
 
@@ -710,21 +668,12 @@ with tab3:
             jenjang_kel['Persentase'] = (jenjang_kel['Jumlah_Siswa'] / total_kel * 100).round(1)
             jenjang_kel['Label_Text'] = jenjang_kel.apply(lambda r: f"{r['Jumlah_Siswa']} ({r['Persentase']}%)", axis=1)
 
-            fig_jenjang_kel = style_chart(px.bar(
-                jenjang_kel,
-                x='Kel Tinggal',
-                y='Jumlah_Siswa',
-                color='Jenjang',
-                barmode='group',
-                text='Label_Text',
-                labels={'Kel Tinggal': 'Kelurahan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}
-            ))
+            fig_jenjang_kel = style_chart(px.bar(jenjang_kel, x='Kel Tinggal', y='Jumlah_Siswa', color='Jenjang', barmode='group', text='Label_Text', labels={'Kel Tinggal': 'Kelurahan Domisili', 'Jumlah_Siswa': 'Jumlah Siswa'}))
             fig_jenjang_kel.update_traces(textposition='outside')
             st.plotly_chart(fig_jenjang_kel, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram:** Pemetaan tingkat kelurahan secara mendalam untuk mengidentifikasi area pemukiman yang paling potensial untuk penetrasi pasar.")
-
+            st.caption("📝 **Penjelasan Diagram:** Pemetaan tingkat kelurahan secara mendalam.")
     else:
-        st.warning(f"Data Sekolah/Domisili tidak ditemukan.")
+        st.warning("Data Sekolah/Domisili tidak ditemukan.")
 
 # --- TAB 4: DISKON KHUSUS ---
 with tab4:
@@ -733,13 +682,9 @@ with tab4:
 
     if not df_diskon.empty:
         col1, col2, col3, col4 = st.columns(4)
-        
         tot_diskon_nominal = df_diskon['Besar Diskon'].fillna(0).sum() if 'Besar Diskon' in df_diskon.columns else 0
         df_valid_diskon = df_diskon[df_diskon['Besar Diskon'] > 0] if 'Besar Diskon' in df_diskon.columns else pd.DataFrame()
         avg_diskon_nominal = df_valid_diskon['Besar Diskon'].mean() if not df_valid_diskon.empty else 0.0
-        if pd.isna(avg_diskon_nominal):
-            avg_diskon_nominal = 0.0
-
         cnt_diskon_jenis = df_diskon['Nama Diskon'].nunique() if 'Nama Diskon' in df_diskon.columns else 0
 
         col1.metric("Penerima Diskon Terfilter", f"{len(df_diskon)} Siswa")
@@ -755,21 +700,10 @@ with tab4:
             if 'Nama Diskon' in df_diskon.columns:
                 diskon_type = df_diskon['Nama Diskon'].value_counts().reset_index()
                 diskon_type.columns = ['Nama Diskon', 'Jumlah Siswa']
-                
-                fig_diskon_pie = style_chart(px.pie(
-                    diskon_type, 
-                    names='Nama Diskon', 
-                    values='Jumlah Siswa', 
-                    hole=0.4
-                ))
-                
-                fig_diskon_pie.update_traces(
-                    textinfo='value+percent',
-                    texttemplate='%{value} siswa<br>(%{percent})'
-                )
-                
+                fig_diskon_pie = style_chart(px.pie(diskon_type, names='Nama Diskon', values='Jumlah Siswa', hole=0.4))
+                fig_diskon_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig_diskon_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan proporsi penggunaan jenis promo/diskon (seperti Diskon Juara/PSJ, Anak Guru, Saudara Kandung) yang diklaim pendaftar.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan proporsi penggunaan jenis promo/diskon yang diklaim pendaftar.")
 
         with c2:
             st.subheader("Total Nominal Diskon per Lokasi Belajar")
@@ -778,47 +712,36 @@ with tab4:
                 diskon_lokasi.columns = ['Lokasi Belajar', 'Besar Diskon']
                 fig_diskon_bar = style_chart(px.bar(diskon_lokasi, x='Lokasi Belajar', y='Besar Diskon', text_auto='.2s', color='Besar Diskon'))
                 st.plotly_chart(fig_diskon_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total pengeluaran beban potongan harga (diskon kupon) yang diberikan pada masing-masing cabang.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total pengeluaran beban potongan harga per cabang.")
 
         st.divider()
 
         st.subheader("Detail Data Siswa Penerima Diskon & Program Juara (Terfilter)")
         disp_cols = [c for c in ['Nomor Formulir', 'Kwitansi', 'Nama Diskon', 'Besar Diskon', 'Sumber', 'lb_clean', 'Jenjang', 'Kec Tinggal', 'Kel Tinggal'] if c in df_diskon.columns]
         st.dataframe(df_diskon[disp_cols], use_container_width=True)
-        st.caption("📝 **Penjelasan Tabel:** Rincian baris data siswa yang berhak menerima potongan harga beserta nilai nominal dan sumber pencatatannya.")
+        st.caption("📝 **Penjelasan Tabel:** Rincian baris data siswa yang berhak menerima potongan harga.")
     else:
-        st.warning(f"Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
+        st.warning("Data Diskon Khusus tidak ditemukan untuk filter aktif saat ini.")
 
 # --- TAB 5: PERBANDINGAN MULTI-TA ---
 with tab5:
     st.header("📈 Analisis & Komparasi Tren Multi-Tahun Ajaran (Multi-TA)")
     st.info("💡 **Tersinkronisasi:** Seluruh grafik di bawah ini membandingkan tren performa antar Tahun Ajaran berdasarkan Lokasi, Jenjang, dan Domisili terfilter.")
 
-    df_s_comp = df_siswa_raw.copy()
-    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_s_comp.columns:
-        df_s_comp = df_s_comp[df_s_comp['lb_clean'] == selected_lb]
+    df_s_comp = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
     if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_s_comp.columns:
-        df_s_comp = df_s_comp[df_s_comp['Jenjang'] == selected_jenjang]
+        df_s_comp = df_s_comp[df_s_comp['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
     if selected_kec != "Semua Kecamatan" and 'Kec Tinggal' in df_s_comp.columns:
-        df_s_comp = df_s_comp[df_s_comp['Kec Tinggal'] == selected_kec]
+        df_s_comp = df_s_comp[df_s_comp['Kec Tinggal'].fillna('').astype(str).str.upper() == selected_kec.upper()]
     if selected_kel != "Semua Kelurahan" and 'Kel Tinggal' in df_s_comp.columns:
-        df_s_comp = df_s_comp[df_s_comp['Kel Tinggal'] == selected_kel]
+        df_s_comp = df_s_comp[df_s_comp['Kel Tinggal'].fillna('').astype(str).str.upper() == selected_kel.upper()]
 
-    df_t_comp = df_trx_raw.copy()
-    if selected_lb != "Semua Cabang / Lokasi" and 'lb_clean' in df_t_comp.columns:
-        df_t_comp = df_t_comp[df_t_comp['lb_clean'] == selected_lb]
+    df_t_comp = filter_dataframe_location(df_trx_raw, selected_lb, user_lbs)
     if selected_jenjang != "Semua Jenjang" and 'Jenjang' in df_t_comp.columns:
-        df_t_comp = df_t_comp[df_t_comp['Jenjang'] == selected_jenjang]
+        df_t_comp = df_t_comp[df_t_comp['Jenjang'].fillna('').astype(str).str.upper() == selected_jenjang.upper()]
 
     if not df_s_comp.empty and 'ta_clean' in df_s_comp.columns:
-        
-        def calculate_delta_df(df_grouped, col_cat, col_val='Jumlah'):
-            df_pivot = df_grouped.pivot(index='ta_clean', columns=col_cat, values=col_val).fillna(0)
-            df_diff = df_pivot.diff().fillna(0)
-            df_pct = (df_pivot.pct_change() * 100).fillna(0).round(1)
-            return df_pivot, df_diff, df_pct
-
-        # 1. Jumlah Siswa Lama / Baru
+        # 1. Jumlah Siswa Lama vs Baru per TA
         st.subheader("1. Jumlah Siswa Lama vs Baru per TA")
         if 'Kategori_Siswa' in df_s_comp.columns:
             g1 = df_s_comp.groupby(['ta_clean', 'Kategori_Siswa']).size().reset_index(name='Jumlah')
@@ -826,14 +749,14 @@ with tab5:
             with c1:
                 fig1_bar = style_chart(px.bar(g1, x='ta_clean', y='Jumlah', color='Kategori_Siswa', barmode='group', text_auto=True, title="Diagram Batang Kategori Siswa"))
                 st.plotly_chart(fig1_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan perbandingan jumlah riil siswa lama vs baru yang terdaftar di tiap Tahun Ajaran.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan perbandingan jumlah riil siswa lama vs baru di tiap Tahun Ajaran.")
             with c2:
-                fig1_pie = style_chart(px.pie(g1, names='Kategori_Siswa', values='Jumlah', color='ta_clean', hole=0.4, title="Proporsi Akumulasi Status Siswa"))
+                fig1_pie = style_chart(px.pie(g1, names='Kategori_Siswa', values='Jumlah', hole=0.4, title="Proporsi Akumulasi Status Siswa"))
                 fig1_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig1_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan rasio akumulasi pendaftar baru dibandingkan re-enrollment secara keseluruhan.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Menggambarkan rasio akumulasi pendaftar baru dibanding re-enrollment.")
             
-            piv1, diff1, pct1 = calculate_delta_df(g1, 'Kategori_Siswa')
+            piv1 = g1.pivot(index='ta_clean', columns='Kategori_Siswa', values='Jumlah').fillna(0)
             st.caption("📈 **Tabel Rekapitulasi Perubahan YoY:**")
             st.dataframe(piv1.style.highlight_max(axis=0), use_container_width=True)
 
@@ -841,11 +764,7 @@ with tab5:
 
         # 2. Komparasi Paket Bimbingan vs Cash In
         st.subheader("2. Komparasi Paket Bimbingan vs Realisasi Cash In per TA")
-        g2 = df_s_comp.groupby('ta_clean').agg(
-            Nilai_Paket=('Biaya Paket', 'sum'),
-            Cash_In=('Total Bayar', 'sum')
-        ).reset_index()
-        
+        g2 = df_s_comp.groupby('ta_clean').agg(Nilai_Paket=('Biaya Paket', 'sum'), Cash_In=('Total Bayar', 'sum')).reset_index()
         g2_melt = g2.melt(id_vars='ta_clean', value_vars=['Nilai_Paket', 'Cash_In'], var_name='Kategori', value_name='Nominal')
         g2_melt['Kategori'] = g2_melt['Kategori'].replace({'Nilai_Paket': 'Nilai Paket Bimbingan', 'Cash_In': 'Total Cash In (Bayar)'})
 
@@ -853,29 +772,28 @@ with tab5:
         with c1:
             fig2_bar = style_chart(px.bar(g2_melt, x='ta_clean', y='Nominal', color='Kategori', barmode='group', text_auto='.3s', title="Perbandingan Nilai Paket vs Cash In"))
             st.plotly_chart(fig2_bar, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Batang:** Membandingkan nilai omset bruto paket bimbingan dengan realisasi dana tunai (cash-in) yang diterima dari TA ke TA.")
+            st.caption("📝 **Penjelasan Diagram Batang:** Membandingkan nilai omset paket bimbingan dengan realisasi dana tunai (cash-in).")
         with c2:
             fig2_pie = style_chart(px.pie(g2_melt, names='Kategori', values='Nominal', hole=0.4, title="Proporsi Realisasi Bimbingan vs Cash In"))
             fig2_pie.update_traces(textinfo='value+percent')
             st.plotly_chart(fig2_pie, use_container_width=True)
-            st.caption("📝 **Penjelasan Diagram Donat:** Menunjukkan rasio tingkat efektivitas penagihan tunai terhadap target nilai paket.")
+            st.caption("📝 **Penjelasan Diagram Donat:** Rasio efektivitas penagihan tunai terhadap target nilai paket.")
 
         st.divider()
 
-        # 3. Tren Pendapatan Harian
+        # 3. Tren Pendapatan Harian Antar TA
         st.subheader("3. Tren Pendapatan Harian Antar TA")
         if not df_t_comp.empty and 'Tanggal' in df_t_comp.columns:
             df_t_comp['Tanggal'] = pd.to_datetime(df_t_comp['Tanggal'])
             df_t_comp['Bulan_Tgl'] = df_t_comp['Tanggal'].dt.strftime('%m-%d')
             g3 = df_t_comp.groupby(['Bulan_Tgl', 'ta_clean'])['Jumlah'].sum().reset_index()
-
-            fig3_line = style_chart(px.line(g3, x='Bulan_Tgl', y='Jumlah', color='ta_clean', markers=True, title="Grafik Tren Pendapatan Harian (Disetarakan Tanggal & Bulan)"))
+            fig3_line = style_chart(px.line(g3, x='Bulan_Tgl', y='Jumlah', color='ta_clean', markers=True, title="Grafik Tren Pendapatan Harian"))
             st.plotly_chart(fig3_line, use_container_width=True)
-            st.caption("📝 **Penjelasan Grafik Garis Multi-Garis:** Menyejajarkan pola pemasukan harian harian antar TA pada kalender tanggal yang sama untuk menganalisis puncak periode penerimaan kas.")
+            st.caption("📝 **Penjelasan Grafik Garis Multi-Garis:** Menyejajarkan pola pemasukan harian antar TA pada kalender tanggal yang sama.")
 
         st.divider()
 
-        # 4. Proporsi Metode Pembayaran
+        # 4. Proporsi & Distribusi Metode Pembayaran per TA
         st.subheader("4. Proporsi & Distribusi Metode Pembayaran per TA")
         if not df_t_comp.empty and 'Type Bayar' in df_t_comp.columns:
             g4 = df_t_comp.groupby(['ta_clean', 'Type Bayar']).size().reset_index(name='Jumlah')
@@ -883,16 +801,16 @@ with tab5:
             with c1:
                 fig4_bar = style_chart(px.bar(g4, x='ta_clean', y='Jumlah', color='Type Bayar', barmode='group', text_auto=True, title="Diagram Batang Metode Pembayaran"))
                 st.plotly_chart(fig4_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Memantau pergeseran tren kanal pembayaran yang disukai wali siswa dari tahun ke tahun.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Memantau pergeseran tren kanal pembayaran dari tahun ke tahun.")
             with c2:
                 fig4_pie = style_chart(px.pie(g4, names='Type Bayar', values='Jumlah', hole=0.4, title="Proporsi Metode Pembayaran"))
                 fig4_pie.update_traces(textinfo='value+percent', texttemplate='%{value} trx<br>(%{percent})')
                 st.plotly_chart(fig4_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran keuangan.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Persentase pangsa penggunaan tiap kanal pembayaran.")
 
         st.divider()
 
-        # 5. Distribusi Jenjang Kelas
+        # 5. Distribusi Jenjang Kelas per TA
         st.subheader("5. Distribusi Jenjang Kelas per TA")
         if 'Jenjang' in df_s_comp.columns:
             g5 = df_s_comp.groupby(['ta_clean', 'Jenjang']).size().reset_index(name='Jumlah')
@@ -909,7 +827,7 @@ with tab5:
 
         st.divider()
 
-        # 6. Proporsi Pendaftaran Online vs Offline
+        # 6. Proporsi Pendaftaran Online vs Offline per TA
         st.subheader("6. Proporsi Pendaftaran Online vs Offline per TA")
         if 'Jalur_Daftar' in df_s_comp.columns:
             g6 = df_s_comp.groupby(['ta_clean', 'Jalur_Daftar']).size().reset_index(name='Jumlah')
@@ -917,29 +835,28 @@ with tab5:
             with c1:
                 fig6_bar = style_chart(px.bar(g6, x='ta_clean', y='Jumlah', color='Jalur_Daftar', barmode='group', text_auto=True, title="Diagram Batang Jalur Pendaftaran"))
                 st.plotly_chart(fig6_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Batang:** Pertumbuhan pendaftar jalur Online Web PSB dibanding pendaftaran Offline langsung.")
+                st.caption("📝 **Penjelasan Diagram Batang:** Pertumbuhan pendaftar jalur Online Web PSB dibanding Offline.")
             with c2:
                 fig6_pie = style_chart(px.pie(g6, names='Jalur_Daftar', values='Jumlah', hole=0.4, title="Proporsi Pendaftaran Online vs Offline"))
                 fig6_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig6_pie, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan proporsi penetrasi jalur pendaftaran digital vs konvensional.")
+                st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan proporsi penetrasi jalur pendaftaran.")
 
         st.divider()
 
-        # 7. Top Asal Sekolah Pendaftar
+        # 7. Top Asal Sekolah Pendaftar per TA
         st.subheader("7. Top Asal Sekolah Pendaftar per TA")
         if 'Asal Sekolah' in df_s_comp.columns:
             top_sch_list = df_s_comp['Asal Sekolah'].value_counts().head(10).index
             df_top_sch = df_s_comp[df_s_comp['Asal Sekolah'].isin(top_sch_list)]
             g7 = df_top_sch.groupby(['Asal Sekolah', 'ta_clean']).size().reset_index(name='Jumlah')
-
             fig7_bar = style_chart(px.bar(g7, x='Asal Sekolah', y='Jumlah', color='ta_clean', barmode='group', text_auto=True, title="10 Sekolah Penyumbang Siswa Terbanyak per TA"))
             st.plotly_chart(fig7_bar, use_container_width=True)
             st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan tren pergerakan dinamika jumlah pendaftar dari 10 sekolah mitra utama antar TA.")
 
         st.divider()
 
-        # 8. Detail Sebaran Sekolah & Lokasi Belajar
+        # 8. Detail Sebaran Sekolah & Lokasi Belajar Antar TA
         st.subheader("8. Detail Sebaran Sekolah & Lokasi Belajar Antar TA")
         if 'Asal Sekolah' in df_s_comp.columns and 'lb_clean' in df_s_comp.columns:
             g8 = df_s_comp.groupby(['ta_clean', 'Asal Sekolah', 'lb_clean']).size().reset_index(name='Jumlah_Siswa')
@@ -948,42 +865,34 @@ with tab5:
 
         st.divider()
 
-        # 9. Presentase Status Bayar per Domisili
+        # 9. Presentase Status Bayar per Domisili Antar TA
         st.subheader("9. Persentase Status Bayar per Domisili (Lunas vs Angsuran) Antar TA")
         if 'Tagihan' in df_s_comp.columns and 'Kec Tinggal' in df_s_comp.columns:
             df_s_comp['Status_Bayar'] = df_s_comp['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
-            dom_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" else 'Kec Tinggal'
+            dom_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" and 'Kel Tinggal' in df_s_comp.columns else 'Kec Tinggal'
             g9 = df_s_comp.groupby(['ta_clean', dom_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
-
             c1, c2 = st.columns(2)
             with c1:
                 fig9_bar = style_chart(px.bar(g9, x=dom_col, y='Jumlah', color='Status_Bayar', facet_col='ta_clean', barmode='stack', text_auto=True, title="Status Bayar per Domisili per TA"))
                 st.plotly_chart(fig9_bar, use_container_width=True)
-                st.caption("📝 **Penjelasan Diagram Tumpuk:** Komparasi jumlah siswa yang telah Lunas vs Mengangsur pada masing-masing wilayah domisili dari TA ke TA.")
+                st.caption("📝 **Penjelasan Diagram Tumpuk:** Komparasi jumlah siswa Lunas vs Mengangsur pada wilayah domisili dari TA ke TA.")
             with c2:
                 fig9_pie = style_chart(px.pie(g9, names='Status_Bayar', values='Jumlah', hole=0.4, title="Proporsi Lunas vs Angsuran"))
                 fig9_pie.update_traces(textinfo='value+percent', texttemplate='%{value} siswa<br>(%{percent})')
                 st.plotly_chart(fig9_pie, use_container_width=True)
                 st.caption("📝 **Penjelasan Diagram Donat:** Perbandingan akumulasi rasio kesehatan pelunasan biaya bimbingan.")
-
     else:
-        st.warning("Data multi-tahun ajaran tidak cukup untuk ditampilkan.")
+        st.warning("Data multi-tahun ajaran tidak ditemukan untuk kombinasi filter yang dipilih.")
 
 # --- TAB 6: STATUS BAYAR DOMISILI ---
 with tab6:
     st.header("📊 Analisis Persentase Lunas & Angsuran Berdasarkan Domisili")
-    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter Tahun Ajaran, Lokasi Belajar, Jenjang Kelas, Kecamatan, dan Kelurahan yang aktif di atas.")
+    st.info("💡 **Tersinkronisasi dengan Filter:** Data di bawah ini secara otomatis beradaptasi mengikuti filter aktif.")
 
     if not df_siswa.empty and 'Kec Tinggal' in df_siswa.columns:
         df_status = df_siswa.copy()
-        
         df_status['Status_Bayar'] = df_status['Tagihan'].apply(lambda x: 'Lunas' if x >= 0 else 'Angsuran')
         
-        if 'ta_clean' not in df_status.columns:
-            df_status['ta_clean'] = df_status['TA'].apply(clean_str)
-        if 'lb_clean' not in df_status.columns:
-            df_status['lb_clean'] = df_status['lb'].apply(format_lb)
-
         col_st1, col_st2, col_st3, col_st4 = st.columns(4)
         total_s = len(df_status)
         total_lunas = len(df_status[df_status['Status_Bayar'] == 'Lunas'])
@@ -992,35 +901,22 @@ with tab6:
         col_st1.metric("Total Siswa Terfilter", f"{total_s} Siswa")
         col_st2.metric("Siswa Lunas", f"{total_lunas} Siswa ({round(total_lunas/total_s*100,1) if total_s>0 else 0}%)")
         col_st3.metric("Siswa Angsuran", f"{total_angsuran} Siswa ({round(total_angsuran/total_s*100,1) if total_s>0 else 0}%)")
-        col_st4.metric("Jumlah Domisili", f"{df_status['Kel Tinggal'].nunique()} Kelurahan")
+        col_st4.metric("Jumlah Domisili", f"{df_status['Kel Tinggal'].nunique() if 'Kel Tinggal' in df_status.columns else 0} Kelurahan")
 
         st.divider()
 
         st.subheader("1. Grafik Presentase Status Bayar per Domisili")
+        domisili_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" and 'Kel Tinggal' in df_status.columns else 'Kec Tinggal'
+        dom_summary = df_status.groupby(['lb_clean', domisili_col, 'Status_Bayar']).size().reset_index(name='Jumlah') if 'lb_clean' in df_status.columns else df_status.groupby([domisili_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
         
-        domisili_col = 'Kel Tinggal' if selected_kec != "Semua Kecamatan" else 'Kec Tinggal'
-        domisili_label = 'Kelurahan' if selected_kec != "Semua Kecamatan" else 'Kecamatan'
-
-        dom_summary = df_status.groupby(['lb_clean', domisili_col, 'Status_Bayar']).size().reset_index(name='Jumlah')
-        
-        fig_status_dom = style_chart(px.bar(
-            dom_summary, 
-            x=domisili_col, 
-            y='Jumlah', 
-            color='Status_Bayar', 
-            barmode='stack',
-            facet_col='lb_clean',
-            text_auto=True,
-            color_discrete_map={'Lunas': '#00cc96', '#ef553b': '#ef553b'},
-            labels={domisili_col: f'{domisili_label} Domisili', 'lb_clean': 'Lokasi Belajar'}
-        ))
+        fig_status_dom = style_chart(px.bar(dom_summary, x=domisili_col, y='Jumlah', color='Status_Bayar', barmode='stack', text_auto=True, color_discrete_map={'Lunas': '#00cc96', 'Angsuran': '#ef553b'}))
         st.plotly_chart(fig_status_dom, use_container_width=True)
-        st.caption("📝 **Penjelasan Diagram Batang Tumpuk:** Menampilkan proporsi jumlah siswa yang sudah Lunas (hijau) dan yang masih Mengangsur (merah) dipisahkan per wilayah domisili.")
+        st.caption("📝 **Penjelasan Diagram Batang Tumpuk:** Menampilkan proporsi jumlah siswa Lunas dan Mengangsur dipisahkan per wilayah domisili.")
 
         st.divider()
 
         st.subheader("2. Tabel Rincian Persentase per Kecamatan Domisili (Terfilter)")
-        rekap_kec = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
+        rekap_kec = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index() if 'ta_clean' in df_status.columns and 'lb_clean' in df_status.columns else df_status.groupby(['Kec Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
         
         if 'Lunas' not in rekap_kec.columns:
             rekap_kec['Lunas'] = 0
@@ -1031,43 +927,8 @@ with tab6:
         rekap_kec['% Lunas'] = (rekap_kec['Lunas'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
         rekap_kec['% Angsuran'] = (rekap_kec['Angsuran'] / rekap_kec['Total Siswa'] * 100).round(1).astype(str) + '%'
 
-        rekap_kec = rekap_kec.rename(columns={
-            'ta_clean': 'Tahun Ajaran (TA)',
-            'lb_clean': 'Lokasi Belajar',
-            'Kecamatan': 'Kecamatan Domisili',
-            'Lunas': 'Jumlah Lunas',
-            'Angsuran': 'Jumlah Angsuran'
-        })
-        
         st.dataframe(rekap_kec, use_container_width=True)
-        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan. Berguna bagi tim penagihan (*finance*) untuk memprioritaskan area pemukiman dengan persentase angsuran tinggi.")
-
-        st.divider()
-
-        st.subheader("3. Tabel Rincian Persentase per Kelurahan Domisili (Terfilter)")
-        rekap_kel = df_status.groupby(['ta_clean', 'lb_clean', 'Kec Tinggal', 'Kel Tinggal', 'Status_Bayar']).size().unstack(fill_value=0).reset_index()
-        
-        if 'Lunas' not in rekap_kel.columns:
-            rekap_kel['Lunas'] = 0
-        if 'Angsuran' not in rekap_kel.columns:
-            rekap_kel['Angsuran'] = 0
-
-        rekap_kel['Total Siswa'] = rekap_kel['Lunas'] + rekap_kel['Angsuran']
-        rekap_kel['% Lunas'] = (rekap_kel['Lunas'] / rekap_kel['Total Siswa'] * 100).round(1).astype(str) + '%'
-        rekap_kel['% Angsuran'] = (rekap_kel['Angsuran'] / rekap_kel['Total Siswa'] * 100).round(1).astype(str) + '%'
-
-        rekap_kel = rekap_kel.rename(columns={
-            'ta_clean': 'Tahun Ajaran (TA)',
-            'lb_clean': 'Lokasi Belajar',
-            'Kecamatan': 'Kecamatan',
-            'Kel Tinggal': 'Kelurahan Domisili',
-            'Lunas': 'Jumlah Lunas',
-            'Angsuran': 'Jumlah Angsuran'
-        })
-        
-        st.dataframe(rekap_kel, use_container_width=True)
-        st.caption("📝 **Penjelasan Tabel Rincian:** Rincian tingkat Kelurahan untuk penanganan lanjutan (*follow-up*) penagihan piutang sisa paket bimbingan.")
-
+        st.caption("📝 **Penjelasan Tabel Rincian:** Tabel evaluasi keuangan per Kecamatan.")
     else:
         st.warning("Data Siswa untuk analisis status bayar domisili tidak ditemukan untuk filter ini.")
 
@@ -1077,7 +938,7 @@ with tab7:
     st.info("💡 **AI Engine Integration:** Modul ini menganalisis seluruh data pada dashboard untuk menghasilkan Laporan Eksekutif dengan struktur Memorandum Resmi & Pendekatan 4 Analisis Data (Deskriptif, Diagnostik, Prediktif, & Preskriptif).")
 
     if not df_siswa.empty:
-        sender_cabang = f"Tim Cabang {selected_lb}" if selected_lb != "Semua Cabang / Lokasi" else "Tim Gabungan Cabang (Wilayah Megapolitan Selatan)"
+        sender_cabang = f"Tim Cabang {selected_lb}" if not str(selected_lb).startswith("Gabungan") and selected_lb not in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"] else f"Tim Gabungan Cabang ({selected_lb})"
         current_date_str = datetime.now().strftime("%d %B %Y")
 
         st.subheader("📌 1. Smart Executive Summary (Otomatis)")
@@ -1119,10 +980,9 @@ with tab7:
 
         st.divider()
 
-        # 2. GENERATIVE AI EXECUTIVE REPORT (OTOMATIS GEMINI KEY SECRETS)
+        # 2. GENERATIVE AI EXECUTIVE REPORT
         st.subheader("✨ 2. Generative AI Executive Report (Google Gemini AI)")
         
-        # Penarikan Otomatis dari Streamlit Secrets / Environment
         system_gemini_key = st.secrets.get("GEMINI_API_KEY", "")
         
         if system_gemini_key:
@@ -1134,7 +994,7 @@ with tab7:
                 user_gemini_key = st.text_input("Masukkan Gemini API Key Anda:", type="password", key="gemini_key_input")
 
         ctx_lines = [
-            f"Filter Terpilih: {ta_info}, {lb_info}, {jj_info}, {dom_info}",
+            f"Filter Terpilih: {ta_info}, {lb_info}",
             f"Total Siswa Terdaftar: {tot_siswa} Siswa",
             f"Total Target Paket Bimbingan: Rp {tot_paket:,.0f}",
             f"Total Realisasi Pembayaran (Cash In): Rp {tot_bayar:,.0f}",
@@ -1147,13 +1007,10 @@ with tab7:
         if 'Asal Sekolah' in df_siswa.columns:
             top_sch_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Asal Sekolah'].value_counts().head(5).items()])
             ctx_lines.append(f"Top Asal Sekolah: {top_sch_str}")
-        if 'Kec Tinggal' in df_siswa.columns:
-            top_kec_str = ', '.join([f'{k} ({v})' for k,v in df_siswa['Kec Tinggal'].value_counts().head(5).items()])
-            ctx_lines.append(f"Top Domisili Kecamatan: {top_kec_str}")
 
         data_context = "\n- ".join([""] + ctx_lines)
 
-        if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
+        if st.button("✨ Hasikan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
             if not user_gemini_key:
                 st.error("⚠️ API Key tidak ditemukan. Silakan tambahkan `GEMINI_API_KEY` pada Streamlit Secrets.")
             else:
@@ -1197,12 +1054,10 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     
                     st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
 
-        # PENAMPILAN HASIL LAPORAN DAN TOMBOL DOWNLOAD PDF
         if 'ai_report_text' in st.session_state and st.session_state.ai_report_text:
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            # Format HTML Cetak Dokumen PDF
             escaped_report = html.escape(st.session_state.ai_report_text)
             pdf_html = f"""
             <!DOCTYPE html>
@@ -1211,35 +1066,21 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                 <meta charset="utf-8">
                 <title>Memorandum Eksekutif - {lb_info}</title>
                 <style>
-                    body {{
-                        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
-                        line-height: 1.6;
-                        color: #1A1A1A;
-                        padding: 30px;
-                        max-width: 800px;
-                        margin: 0 auto;
-                    }}
+                    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #1A1A1A; padding: 30px; max-width: 800px; margin: 0 auto; }}
                     h1, h2, h3 {{ color: #003366; }}
                     hr {{ border: 0; border-top: 1px solid #CCC; margin: 20px 0; }}
-                    pre {{
-                        white-space: pre-wrap;
-                        font-family: inherit;
-                        font-size: 1rem;
-                    }}
+                    pre {{ white-space: pre-wrap; font-family: inherit; font-size: 1rem; }}
                 </style>
             </head>
             <body>
                 <pre>{escaped_report}</pre>
                 <script>
-                    window.onload = function() {{
-                        window.print();
-                    }}
+                    window.onload = function() {{ window.print(); }}
                 </script>
             </body>
             </html>
             """
             
-            import base64
             b64_html = base64.b64encode(pdf_html.encode('utf-8')).decode('utf-8')
             pdf_href = f'data:text/html;base64,{b64_html}'
             
@@ -1252,9 +1093,7 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
 
         st.divider()
 
-        # 3. CHATBOT TANYA-JAWAB AI INTERAKTIF
         st.subheader("💬 3. Tanya AI Seputar Data Dashboard (Interactive Q&A)")
-        
         user_question = st.text_input("Tanyakan sesuatu tentang data ini (Contoh: 'Apa saran untuk meningkatkan pelunasan tagihan?'):", key="ai_q_input")
         if st.button("Tanyakan ke AI", use_container_width=True):
             if not user_gemini_key:
@@ -1275,3 +1114,16 @@ Jawablah pertanyaan tersebut secara ringkas, lugas, ramah, dan berbasis data di 
 
     else:
         st.warning("Data tidak tersedia untuk dilakukan analisis AI.")
+
+# ---------------------------------------------------------
+# FOOTER COPYRIGHT
+# ---------------------------------------------------------
+st.markdown(
+    """
+    <hr style="margin-top: 50px; margin-bottom: 20px; border: 0; border-top: 1px solid rgba(128,128,128,0.2);">
+    <div style="text-align: center; color: gray; font-size: 0.85rem; padding-bottom: 20px;">
+        Copyright © 2026 PT. Indonesia Juara Semesta. All Rights Reserved. Dikembangkan oleh Ade Dimas Shirotuddin.
+    </div>
+    """,
+    unsafe_allow_html=True
+)
