@@ -1,4 +1,5 @@
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
 import glob
@@ -50,25 +51,6 @@ st.markdown("""
         color: var(--text-color) !important;
         border: 1px solid rgba(128, 128, 128, 0.2) !important;
         border-radius: 10px !important;
-    }
-    .btn-download-pdf {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #FF4B4B 0%, #FF2B2B 100%);
-        color: #FFFFFF !important;
-        font-weight: 700;
-        font-size: 1rem;
-        padding: 12px 28px;
-        border-radius: 10px;
-        text-decoration: none !important;
-        border: none;
-        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.35);
-        transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
-        cursor: pointer;
-        width: 100%;
-        margin-top: 15px;
-        margin-bottom: 15px;
     }
     .greeting-title {
         font-size: 1.25rem;
@@ -390,7 +372,7 @@ def get_kategori_siswa(biaya):
     else:
         return f'Lainnya (Rp{int(biaya):,})'
 
-def generate_pdf_html(md_text, lb_info):
+def format_markdown_to_html(md_text):
     clean_text = md_text.replace("<br>", "\n")
     html_content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', clean_text, flags=re.M)
     html_content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_content, flags=re.M)
@@ -398,46 +380,7 @@ def generate_pdf_html(md_text, lb_info):
     html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
     html_content = re.sub(r'^\- (.*?)$', r'<li>\1</li>', html_content, flags=re.M)
     html_content = html_content.replace('\n', '<br>')
-
-    return f"""
-    <!DOCTYPE html>
-    <html>
-    <head>
-        <meta charset="utf-8">
-        <title>Memorandum Eksekutif - {lb_info}</title>
-        <style>
-            @page {{ size: A4; margin: 20mm; }}
-            body {{
-                font-family: 'Arial', sans-serif;
-                line-height: 1.6;
-                color: #222;
-                padding: 15px;
-            }}
-            .header-banner {{
-                border-bottom: 3px double #00cc96;
-                padding-bottom: 8px;
-                margin-bottom: 20px;
-            }}
-            h1 {{ color: #003366; font-size: 18pt; margin: 0; text-transform: uppercase; }}
-            h2, h3 {{ color: #003366; margin-top: 14pt; margin-bottom: 6pt; font-size: 13pt; border-bottom: 1px solid #ddd; padding-bottom: 3px; }}
-            strong {{ color: #111; }}
-            li {{ margin-bottom: 4px; }}
-        </style>
-    </head>
-    <body>
-        <div class="header-banner">
-            <h1>BKB NURUL FIKRI</h1>
-            <p style="margin:4px 0 0 0; color: #555; font-size: 10pt;">Evidence-Based Policy Tool — Wilayah Megapolitan Selatan</p>
-        </div>
-        <div>{html_content}</div>
-        <script>
-            window.onload = function() {{
-                window.print();
-            }}
-        </script>
-    </body>
-    </html>
-    """
+    return html_content
 
 @st.cache_data(ttl=600)
 def load_combined_data(uploaded_files, filename_keywords):
@@ -1181,21 +1124,97 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            # Generate Dokumen HTML Berformat Memorandum Resmi
-            pdf_html_code = generate_pdf_html(st.session_state.ai_report_text, lb_info)
-            filename_doc = f"Memorandum_Eksekutif_{selected_lb}_{datetime.now().strftime('%Y%m%d')}.html"
+            # Format HTML Inner
+            report_inner_html = format_markdown_to_html(st.session_state.ai_report_text)
+            clean_lb_filename = str(selected_lb).replace(" ", "_").replace("/", "_")
+            pdf_filename = f"Memorandum_Eksekutif_{clean_lb_filename}_{datetime.now().strftime('%Y%m%d')}.pdf"
             
-            # Tombol Download Resmi Streamlit (Tidak Diblokir Browser)
-            st.download_button(
-                label="📄 Download Laporan Eksekutif Resmi (Format Cetak / PDF)",
-                data=pdf_html_code,
-                file_name=filename_doc,
-                mime="text/html",
-                type="primary",
-                use_container_width=True
-            )
-            
-            st.caption("💡 **Petunjuk Simpan PDF:** Setelah mengunduh file di atas, buka file tersebut di browser (Opera/Chrome) lalu tekan **Ctrl + P** dan pilih **Save as PDF**.")
+            # Embed HTML + JS (html2pdf.js) untuk Download Langsung Format .PDF
+            pdf_component_code = f"""
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+                <style>
+                    .btn-pdf {{
+                        background: linear-gradient(135deg, #FF4B4B 0%, #FF2B2B 100%);
+                        color: #FFFFFF;
+                        font-weight: 700;
+                        font-size: 1rem;
+                        padding: 12px 28px;
+                        border: none;
+                        border-radius: 10px;
+                        cursor: pointer;
+                        width: 100%;
+                        box-shadow: 0 4px 15px rgba(255, 75, 75, 0.35);
+                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        transition: all 0.3s ease;
+                    }}
+                    .btn-pdf:hover {{
+                        opacity: 0.9;
+                        transform: translateY(-1px);
+                    }}
+                    #report-content {{
+                        font-family: 'Arial', sans-serif;
+                        line-height: 1.6;
+                        color: #222;
+                        padding: 25px;
+                        background: #FFFFFF;
+                    }}
+                    .header-banner {{
+                        border-bottom: 3px double #00cc96;
+                        padding-bottom: 8px;
+                        margin-bottom: 20px;
+                    }}
+                    h1 {{ color: #003366; font-size: 18pt; margin: 0; text-transform: uppercase; }}
+                    h2, h3 {{ color: #003366; margin-top: 14pt; margin-bottom: 6pt; font-size: 13pt; border-bottom: 1px solid #ddd; padding-bottom: 3px; }}
+                    strong {{ color: #111; }}
+                    li {{ margin-bottom: 4px; }}
+                </style>
+            </head>
+            <body style="margin:0; padding:0; background:transparent;">
+                <button class="btn-pdf" onclick="downloadPDF()">📄 Download Laporan Eksekutif (.PDF)</button>
+
+                <div id="pdf-wrapper" style="display:none;">
+                    <div id="report-content">
+                        <div class="header-banner">
+                            <h1>BKB NURUL FIKRI</h1>
+                            <p style="margin:4px 0 0 0; color: #555; font-size: 10pt;">Evidence-Based Policy Tool — Wilayah Megapolitan Selatan</p>
+                        </div>
+                        <div>{report_inner_html}</div>
+                    </div>
+                </div>
+
+                <script>
+                    function downloadPDF() {{
+                        const element = document.getElementById('report-content');
+                        const wrapper = document.getElementById('pdf-wrapper');
+                        
+                        wrapper.style.display = 'block';
+                        wrapper.style.position = 'absolute';
+                        wrapper.style.left = '-9999px';
+                        wrapper.style.width = '750px';
+
+                        const opt = {{
+                            margin:       [15, 15, 15, 15],
+                            filename:     '{pdf_filename}',
+                            image:        {{ type: 'jpeg', quality: 0.98 }},
+                            html2canvas:  {{ scale: 2, useCORS: true }},
+                            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+                        }};
+
+                        html2pdf().set(opt).from(element).save().then(() => {{
+                            wrapper.style.display = 'none';
+                        }}).catch(err => {{
+                            console.error(err);
+                            wrapper.style.display = 'none';
+                        }});
+                    }}
+                </script>
+            </body>
+            </html>
+            """
+            components.html(pdf_component_code, height=65)
 
         st.divider()
 
