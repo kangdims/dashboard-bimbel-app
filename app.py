@@ -8,6 +8,7 @@ import urllib.error
 import time
 import base64
 import html
+import re
 from datetime import datetime
 
 # ---------------------------------------------------------
@@ -85,6 +86,30 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
+# ---------------------------------------------------------
+# MAPPING MASTER KODE CABANG LOKASI BELAJAR & JENJANG
+# ---------------------------------------------------------
+LOCATION_MAP = {
+    '101': 'NF Taman Margasatwa',
+    '109': 'NF Pasar Minggu',
+    '110': 'NF Bintaro',
+    '216': 'NF Radio Dalam',
+    '107': 'NF Mampang',
+    '219': 'NF Tebet',
+    '192': 'NF Condet',
+    '168': 'NF Halim',
+    '106': 'NF Hek-Kramat Jati',
+    '169': 'NF Tanah Merdeka'
+}
+
+JENJANG_MAP = {
+    'F': '4 SD', 'G': '5 SD', 'H': '6 SD',
+    'I': '7 SMP', 'J': '8 SMP', 'K': '9 SMP',
+    'L': '10 SMA', 'M': '11 SMA', 'N': '12 SMA', 'O': 'RONIN'
+}
+
+JENJANG_ORDER = ['4 SD', '5 SD', '6 SD', '7 SMP', '8 SMP', '9 SMP', '10 SMA', '11 SMA', '12 SMA', 'RONIN']
 
 # ---------------------------------------------------------
 # LOAD DATA ACCESS USER (keyaccess_peg.xlsx & Secrets Fallback)
@@ -275,22 +300,8 @@ uploaded_siswa = st.sidebar.file_uploader("Upload File Data Siswa (.xlsx)", type
 uploaded_diskon = st.sidebar.file_uploader("Upload File Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
 # ---------------------------------------------------------
-# MAPPING KODE CABANG & JENJANG
+# HELPER FUNCTIONS & FORMATTERS
 # ---------------------------------------------------------
-LOCATION_MAP = {
-    '168': 'NF Halim',
-    '192': 'NF Condet',
-    '219': 'NF Tebet'
-}
-
-JENJANG_MAP = {
-    'F': '4 SD', 'G': '5 SD', 'H': '6 SD',
-    'I': '7 SMP', 'J': '8 SMP', 'K': '9 SMP',
-    'L': '10 SMA', 'M': '11 SMA', 'N': '12 SMA', 'O': 'RONIN'
-}
-
-JENJANG_ORDER = ['4 SD', '5 SD', '6 SD', '7 SMP', '8 SMP', '9 SMP', '10 SMA', '11 SMA', '12 SMA', 'RONIN']
-
 def style_chart(fig):
     fig.update_layout(
         paper_bgcolor='rgba(0,0,0,0)',
@@ -323,7 +334,7 @@ def ask_gemini_ai(api_key, prompt_text, max_retries=3):
     if not api_key:
         return "⚠️ **API Key tidak boleh kosong.**"
     clean_key = str(api_key).strip().strip("'").strip('"').strip()
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={clean_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent?key={clean_key}"
     headers = {'Content-Type': 'application/json'}
     payload = {"contents": [{"parts": [{"text": prompt_text}]}]}
     for attempt in range(max_retries):
@@ -378,6 +389,55 @@ def get_kategori_siswa(biaya):
         return 'Lainnya / Gratis (Rp0)'
     else:
         return f'Lainnya (Rp{int(biaya):,})'
+
+def generate_pdf_html(md_text, lb_info):
+    clean_text = md_text.replace("<br>", "\n")
+    html_content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', clean_text, flags=re.M)
+    html_content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_content, flags=re.M)
+    html_content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html_content, flags=re.M)
+    html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
+    html_content = re.sub(r'^\- (.*?)$', r'<li>\1</li>', html_content, flags=re.M)
+    html_content = html_content.replace('\n', '<br>')
+
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <meta charset="utf-8">
+        <title>Memorandum Eksekutif - {lb_info}</title>
+        <style>
+            @page {{ size: A4; margin: 20mm; }}
+            body {{
+                font-family: 'Arial', sans-serif;
+                line-height: 1.6;
+                color: #222;
+                padding: 15px;
+            }}
+            .header-banner {{
+                border-bottom: 3px double #00cc96;
+                padding-bottom: 8px;
+                margin-bottom: 20px;
+            }}
+            h1 {{ color: #003366; font-size: 18pt; margin: 0; text-transform: uppercase; }}
+            h2, h3 {{ color: #003366; margin-top: 14pt; margin-bottom: 6pt; font-size: 13pt; border-bottom: 1px solid #ddd; padding-bottom: 3px; }}
+            strong {{ color: #111; }}
+            li {{ margin-bottom: 4px; }}
+        </style>
+    </head>
+    <body>
+        <div class="header-banner">
+            <h1>BKB NURUL FIKRI</h1>
+            <p style="margin:4px 0 0 0; color: #555; font-size: 10pt;">Evidence-Based Policy Tool — Wilayah Megapolitan Selatan</p>
+        </div>
+        <div>{html_content}</div>
+        <script>
+            window.onload = function() {{
+                window.print();
+            }}
+        </script>
+    </body>
+    </html>
+    """
 
 @st.cache_data(ttl=600)
 def load_combined_data(uploaded_files, filename_keywords):
@@ -483,7 +543,9 @@ for df_temp in [df_trx_raw, df_siswa_raw, df_diskon_raw]:
     if not df_temp.empty and 'lb_clean' in df_temp.columns:
         all_lb_set.update(df_temp['lb_clean'].dropna().unique())
 
-user_lbs = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
+user_lbs_raw = [x.strip() for x in lb_peg_raw.split(',') if x.strip()]
+user_lbs = [LOCATION_MAP.get(x, x) for x in user_lbs_raw]
+
 allowed_lb_options = []
 
 if titel_peg in ["SRO", "JRO", "ZT PLUS"]:
@@ -499,7 +561,10 @@ elif titel_peg == "MANAJER AREA":
         area_lbs = df_peg_access[df_peg_access['area'].fillna('').astype(str).str.upper() == area_peg.upper()]['lokasi_belajar'].dropna().tolist()
         parsed_area_lbs = []
         for alb in area_lbs:
-            parsed_area_lbs.extend([x.strip() for x in str(alb).split(',') if x.strip()])
+            for item in str(alb).split(','):
+                item_clean = item.strip()
+                if item_clean:
+                    parsed_area_lbs.append(LOCATION_MAP.get(item_clean, item_clean))
         parsed_area_lbs = sorted(list(set(parsed_area_lbs)))
         if len(parsed_area_lbs) > 1:
             allowed_lb_options = [f"Gabungan Area {area_peg}"] + parsed_area_lbs
@@ -532,15 +597,26 @@ def filter_dataframe_location(df_in, lb_selected, user_locations):
     if df_in.empty or 'lb_clean' not in df_in.columns:
         return df_in
     
-    col_lb_upper = df_in['lb_clean'].fillna('').astype(str).str.upper()
-    
     if lb_selected in ["Semua Cabang / Lokasi", "Dashboard Gabungan Lokasi per Area"]:
         return df_in
-    elif str(lb_selected).startswith("Gabungan"):
-        target_locs_upper = [x.upper() for x in user_locations]
-        return df_in[col_lb_upper.isin(target_locs_upper)]
-    else:
-        return df_in[col_lb_upper == str(lb_selected).upper()]
+        
+    lb_sel_clean = str(lb_selected).upper().replace("NF ", "").strip()
+    
+    if str(lb_selected).startswith("Gabungan"):
+        target_locs = []
+        for u_loc in user_locations:
+            u_str = str(u_loc).strip()
+            mapped_u = LOCATION_MAP.get(u_str, u_str)
+            target_locs.append(mapped_u.upper().replace("NF ", "").strip())
+            target_locs.append(u_str.upper().replace("NF ", "").strip())
+        
+        return df_in[df_in['lb_clean'].fillna('').astype(str).str.upper().apply(
+            lambda x: any(loc in x.replace("NF ", "").strip() or x.replace("NF ", "").strip() in loc for loc in target_locs)
+        )]
+    
+    return df_in[df_in['lb_clean'].fillna('').astype(str).str.upper().apply(
+        lambda x: lb_sel_clean in x.replace("NF ", "").strip() or x.replace("NF ", "").strip() in lb_sel_clean
+    )]
 
 df_kec_source = filter_dataframe_location(df_siswa_raw, selected_lb, user_lbs)
 
@@ -1105,38 +1181,21 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            escaped_report = html.escape(st.session_state.ai_report_text)
-            pdf_html = f"""
-            <!DOCTYPE html>
-            <html>
-            <head>
-                <meta charset="utf-8">
-                <title>Memorandum Eksekutif - {lb_info}</title>
-                <style>
-                    body {{ font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; line-height: 1.6; color: #1A1A1A; padding: 30px; max-width: 800px; margin: 0 auto; }}
-                    h1, h2, h3 {{ color: #003366; }}
-                    hr {{ border: 0; border-top: 1px solid #CCC; margin: 20px 0; }}
-                    pre {{ white-space: pre-wrap; font-family: inherit; font-size: 1rem; }}
-                </style>
-            </head>
-            <body>
-                <pre>{escaped_report}</pre>
-                <script>
-                    window.onload = function() {{ window.print(); }}
-                </script>
-            </body>
-            </html>
-            """
+            # Generate Dokumen HTML Berformat Memorandum Resmi
+            pdf_html_code = generate_pdf_html(st.session_state.ai_report_text, lb_info)
+            filename_doc = f"Memorandum_Eksekutif_{selected_lb}_{datetime.now().strftime('%Y%m%d')}.html"
             
-            b64_html = base64.b64encode(pdf_html.encode('utf-8')).decode('utf-8')
-            pdf_href = f'data:text/html;base64,{b64_html}'
-            
-            st.markdown(
-                f'<a href="{pdf_href}" target="_blank" class="btn-download-pdf">'
-                f'📄 Download Hasil Laporan Analisis Eksekutif AI (PDF)'
-                f'</a>',
-                unsafe_allow_html=True
+            # Tombol Download Resmi Streamlit (Tidak Diblokir Browser)
+            st.download_button(
+                label="📄 Download Laporan Eksekutif Resmi (Format Cetak / PDF)",
+                data=pdf_html_code,
+                file_name=filename_doc,
+                mime="text/html",
+                type="primary",
+                use_container_width=True
             )
+            
+            st.caption("💡 **Petunjuk Simpan PDF:** Setelah mengunduh file di atas, buka file tersebut di browser (Opera/Chrome) lalu tekan **Ctrl + P** dan pilih **Save as PDF**.")
 
         st.divider()
 
