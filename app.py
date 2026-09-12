@@ -1167,7 +1167,11 @@ Sertakan pula pertimbangan kualitatif & batasan operasional cabang berikut dalam
 1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang aktif melakukan penetrasi sekolah mitra via Try Out (TO), asesmen akademik, tes MBTI, & sesi motivasi.
 2. **Monetisasi Database & Promo MILAD NF ke-41 (September 2026)**: Pemanfaatan momentum **MILAD NF ke-41** pada bulan **September 2026** ini dengan memberikan **Diskon 25%** (berlaku offline maupun online) sebagai *closing hook* utama mengonversi database peserta tes gratis START NF (Literasi & Numerasi) dan event promo sekolah.
 3. **Penyederhanaan Web PSB Online (UX Improvement)**: Mendorong Tim IT Pusat memangkas alur pendaftaran Web PSB yang panjang menjadi *Fast Registration* (maksimal 3 langkah ringkas dengan verifikasi OTP WhatsApp) agar tidak menyulitkan orang tua siswa namun tetap terjamin keamanan datanya.
-4. **Tata Kelola Data Cleansing (IT Pusat vs Cabang)**: Proses *Data Cleansing* master data (seperti pembenahan data kategori sekolah "0") ditarik sepenuhnya menjadi kewenangan **Tim IT Pusat** (karena SRO/JRO di cabang tidak memiliki kewenangan manipulasi data master). SRO/JRO cabang hanya bertugas mengidentifikasi dan melaporkan data anomali via sistem pelaporan/ticketing.
+4. **Tata Kelola Data Cleansing & Akar Masalah Migrasi Web Tunggal (IT Pusat vs Cabang)**: 
+   - Fenomena anomali data (seperti sekolah "0" atau atribut data terhapus) berakar dari kebijakan penunggalan platform web oleh NF Pusat.
+   - Sebelumnya SRO/JRO cabang menggunakan `nurulfikri.id/app` untuk memonitoring & memelihara data siswa dari `sil.nurulfikri.id`.
+   - Ketika NF Pusat memutuskan integrasi ke web tunggal `sil.nurulfikri.id`, data dari `nurulfikri.id` dipindahkan dengan cara ditiban ke `sil.nurulfikri.id`. Dalam proses ini, sebagian data terhapus/korup dan tidak dilakukan pengecekan/verifikasi ulang (audit data) oleh Tim IT Pusat.
+   - Karena SRO/JRO di cabang tidak memiliki kewenangan manipulasi data master, proses *Data Cleansing* dan audit rekonsiliasi data migrasi historis ini Wajib menjadi tanggung jawab **Tim IT Pusat**, sedangkan SRO/JRO cabang berperan mendeteksi & melaporkan data anomali (*flagging/ticketing*).
 5. **Mitigasi Kendala VA BSI & Biaya Admin**: Mengatasi hambatan Virtual Account BSI (kurangnya pemahaman orang tua & beban biaya admin Rp3.500 BSI / Rp10.000 non-BSI) melalui pendampingan visual oleh Front Office, serta mengajukan rekomendasi opsi pembayaran bebas biaya admin (QRIS / Multi-Bank) atau skema subsidi biaya admin oleh manajemen.
 6. **Fitur & Fasilitas Unggulan Nurul Fikri**: Penonjolan 100% Pengajar PTN Tatap Muka, Modul Zuper Book, SIP-NF, NF Juara, Free Chat 200 sesi, serta Sistem ANDARA (SNBP) & MBPJ (SNBT).
 
@@ -1186,13 +1190,13 @@ Subjek: Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
 (Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, rasio pelunasan, dan saluran masuk pendaftar).
 
 ### 2. ANALISIS DIAGNOSTIK (Why It Happened)
-(Analisis pemicu & kendala riil: efektivitas promo sekolah/START NF, hambatan alur pendaftaran Web PSB yang kompleks bagi orang tua, serta kendala transaksi VA BSI dan biaya admin).
+(Analisis pemicu & kendala riil: efektivitas promo sekolah/START NF, hambatan alur pendaftaran Web PSB yang kompleks, kendala transaksi VA BSI/biaya admin, serta kelemahan migrasi data historis dari nurulfikri.id/app ke sil.nurulfikri.id yang tertiban dan terhapus tanpa audit IT Pusat).
 
 ### 3. ANALISIS PREDIKTIF (What Will Happen)
-(Proyeksi konversi database START NF memanfaatkan momentum Diskon 25% MILAD NF ke-41 September 2026, serta risiko piutang tertahan jika masalah biaya admin/fitur tidak dimitigasi).
+(Proyeksi konversi database START NF memanfaatkan momentum Diskon 25% MILAD NF ke-41 September 2026, serta risiko akumulasi bad debt & anomali data jika isu migrasi & biaya admin tidak segera dimitigasi).
 
 ### 4. ANALISIS PRESKRIPTIF (What Should We Do)
-(Berikan 4 langkah strategis taktis konkret: 1. Penagihan piutang berbasis aktivasi fitur & mitigasi biaya admin VA BSI; 2. Monetisasi database START NF via Promo MILAD NF ke-41 Diskon 25% di September 2026; 3. Rekomendasi ke IT Pusat untuk simplifikasi alur Web PSB & Data Cleansing terpusat; 4. Penetrasional feeder schools)."""
+(Berikan 4 langkah strategis taktis konkret: 1. Penagihan piutang berbasis aktivasi fitur & mitigasi biaya admin VA BSI; 2. Monetisasi database START NF via Promo MILAD NF ke-41 Diskon 25% di September 2026; 3. Rekomendasi ke IT Pusat untuk simplifikasi alur Web PSB serta pelaksanaan Data Cleansing & Audit Rekonsiliasi Data Migrasi terpusat; 4. Penetrasi terukur feeder schools)."""
                     
                     st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
 
@@ -1337,7 +1341,7 @@ Konteks Program & Kendala Operasional:
 - Penetrasi sekolah via promo TO/MBTI/Asesmen & tes START NF gratis.
 - Monetisasi database via Promo MILAD NF ke-41 (September 2026) Diskon 25%.
 - Kendala UX Web PSB (tahapan terlalu panjang bagi orang tua -> usul Fast Registration OTP WA).
-- Data Cleansing dilakukan IT Pusat (cabang hanya flagging/report).
+- Data Cleansing & Audit Migrasi: Penunggalan web dari nurulfikri.id/app ke sil.nurulfikri.id membuat sebagian data terhapus/ditiban tanpa verifikasi ulang IT Pusat. Membutuhkan audit data terpusat oleh IT Pusat.
 - Kendala VA BSI & Biaya Admin (pendampingan visual & usulan QRIS/subsidi admin).
 
 Pertanyaan Pengguna: '{user_question}'
