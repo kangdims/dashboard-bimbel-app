@@ -376,64 +376,82 @@ def format_markdown_to_html(md_text):
     
     text = md_text.replace("\r\n", "\n").replace("<br>", "\n")
     
-    # Pembersihan pola penanda tebal/asterik yang tidak berpasangan
+    # 1. Bersihkan tanda asteris cacat/tercecer seperti **Kepada:* atau * *Mekanisme:*
     text = re.sub(r'\*\s*\*(.*?):\*', r'<strong>\1:</strong>', text)
     text = re.sub(r'\*\*(.*?):\*', r'<strong>\1:</strong>', text)
     text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
     text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
-    
+    text = text.replace('*', '')
+
     lines = text.split('\n')
     html_lines = []
     in_list = False
     
     for line in lines:
         line_str = line.strip()
-        
-        if line_str.startswith('### '):
+        if not line_str:
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-            html_lines.append(f'<h3 style="color:#003366; font-size:13pt; margin-top:14px; margin-bottom:6px; border-bottom:1px solid #DDD; padding-bottom:3px;">{line_str[4:]}</h3>')
+            continue
+        
+        # Penanganan khusus Judul MEMORANDUM EKSEKUTIF agar rapi di tengah
+        if 'MEMORANDUM EKSEKUTIF' in line_str.upper() and len(line_str) < 35:
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append('<h2 style="text-align: center; color: #003366; margin-top: 10px; margin-bottom: 15px; font-size: 14pt; font-weight: bold; border-bottom: 2px solid #003366; padding-bottom: 6px; page-break-after: avoid;">MEMORANDUM EKSEKUTIF</h2>')
+        
+        elif line_str.startswith('### '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h3 style="color:#003366; font-size:13pt; margin-top:14px; margin-bottom:6px; border-bottom:1px solid #DDD; padding-bottom:3px; page-break-after: avoid;">{line_str[4:]}</h3>')
+        
         elif line_str.startswith('## '):
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-            html_lines.append(f'<h2 style="color:#003366; font-size:14pt; margin-top:16px; margin-bottom:8px; border-bottom:1px solid #003366; padding-bottom:4px;">{line_str[3:]}</h2>')
+            html_lines.append(f'<h2 style="color:#003366; font-size:14pt; margin-top:16px; margin-bottom:8px; border-bottom:1px solid #003366; padding-bottom:4px; page-break-after: avoid;">{line_str[3:]}</h2>')
+        
         elif line_str.startswith('# '):
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-            html_lines.append(f'<h1 style="color:#003366; font-size:16pt; margin-top:18px; margin-bottom:10px;">{line_str[2:]}</h1>')
+            html_lines.append(f'<h1 style="color:#003366; font-size:16pt; margin-top:18px; margin-bottom:10px; page-break-after: avoid;">{line_str[2:]}</h1>')
+        
         elif line_str.startswith('---'):
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
             html_lines.append('<hr style="border:0; border-top:1px solid #CCC; margin:12px 0;">')
             
-        elif re.match(r'^[\*\-]\s+(.*)', line_str):
+        elif re.match(r'^[\-]\s+(.*)', line_str):
             if not in_list:
                 html_lines.append('<ul style="margin-top:4px; margin-bottom:8px; padding-left:20px;">')
                 in_list = True
-            content = re.sub(r'^[\*\-]\s+', '', line_str)
-            html_lines.append(f'<li style="margin-bottom:4px; font-size:12pt;">{content}</li>')
+            content = re.sub(r'^[\-]\s+', '', line_str)
+            html_lines.append(f'<li style="margin-bottom:4px; font-size:12pt; text-align: justify; page-break-inside: avoid;">{content}</li>')
             
         elif re.match(r'^\d+\.\s+(.*)', line_str):
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-            html_lines.append(f'<p style="margin-top:10px; margin-bottom:4px; font-size:12pt;"><strong>{line_str}</strong></p>')
+            html_lines.append(f'<p style="margin-top:10px; margin-bottom:4px; font-size:12pt; text-align: justify; page-break-inside: avoid;">{line_str}</p>')
             
         else:
-            if in_list and line_str == "":
-                html_lines.append('</ul>')
-                in_list = False
-            
-            if line_str != "":
-                if not in_list:
-                    html_lines.append(f'<p style="margin-top:4px; margin-bottom:6px; font-size:12pt; line-height:1.4;">{line_str}</p>')
-                else:
-                    html_lines.append(f'<li style="margin-bottom:4px; font-size:12pt;">{line_str}</li>')
-                    
+            # Penanganan Header Metadata Memo (Kepada, Dari, Tanggal, Subjek)
+            if any(line_str.startswith(hdr) for hdr in ['Kepada:', 'Dari:', 'Tanggal:', 'Subjek:']):
+                if in_list:
+                    html_lines.append('</ul>')
+                    in_list = False
+                html_lines.append(f'<p style="margin-top:2px; margin-bottom:4px; font-size:12pt; text-align: left; page-break-inside: avoid;">{line_str}</p>')
+            else:
+                if in_list:
+                    html_lines.append('</ul>')
+                    in_list = False
+                html_lines.append(f'<p style="margin-top:4px; margin-bottom:6px; font-size:12pt; line-height:1.4; text-align: justify; page-break-inside: avoid;">{line_str}</p>')
+                
     if in_list:
         html_lines.append('</ul>')
         
@@ -1154,12 +1172,12 @@ Sertakan pula pertimbangan kualitatif operasional cabang berikut dalam analisis 
 
 Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesional berikut:
 
-**MEMORANDUM EKSEKUTIF**
+MEMORANDUM EKSEKUTIF
 
-**Kepada:** Manajer Wilayah Megapolitan Selatan
-**Dari:** {sender_cabang}
-**Tanggal:** {current_date_str}
-**Subjek:** Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
+Kepada: Manajer Wilayah Megapolitan Selatan
+Dari: {sender_cabang}
+Tanggal: {current_date_str}
+Subjek: Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
 
 ---
 
@@ -1181,12 +1199,12 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            # Formatting HTML Inner (Format Calibri 12pt, Bersih Asterisk)
+            # Formatting HTML Inner (Format Calibri 12pt, Justify, Tanpa Asteris)
             report_inner_html = format_markdown_to_html(st.session_state.ai_report_text)
             clean_lb_filename = str(selected_lb).replace(" ", "_").replace("/", "_")
             pdf_filename = f"Memorandum_Eksekutif_{clean_lb_filename}_{datetime.now().strftime('%Y%m%d')}.pdf"
             
-            # Layout PDF A4 dengan Margin 1 cm (10mm)
+            # Komponen PDF A4 (Margin 1 cm, Text Justify, No Page-Break Clipping)
             pdf_component_code = f"""
             <!DOCTYPE html>
             <html>
@@ -1218,11 +1236,12 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     #report-content {{
                         font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
                         font-size: 12pt;
-                        line-height: 1.4;
+                        line-height: 1.5;
                         color: #111111;
-                        padding: 10mm;
+                        padding: 0;
                         background: #FFFFFF;
                         box-sizing: border-box;
+                        text-align: justify;
                     }}
                     .header-banner {{
                         border-bottom: 2px solid #003366;
@@ -1244,6 +1263,14 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     strong {{
                         font-weight: bold;
                         color: #000000;
+                    }}
+                    p, li, h1, h2, h3, div {{
+                        page-break-inside: avoid !important;
+                        break-inside: avoid !important;
+                    }}
+                    h1, h2, h3 {{
+                        page-break-after: avoid !important;
+                        break-after: avoid !important;
                     }}
                 </style>
             </head>
@@ -1271,11 +1298,12 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                         wrapper.style.width = '190mm';
 
                         const opt = {{
-                            margin:       [10, 10, 10, 10], // Margin 1 cm
+                            margin:       [10, 10, 10, 10],
                             filename:     '{pdf_filename}',
                             image:        {{ type: 'jpeg', quality: 0.98 }},
                             html2canvas:  {{ scale: 2, useCORS: true, logging: false }},
-                            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
+                            jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }},
+                            pagebreak:    {{ mode: ['avoid-all', 'css', 'legacy'] }}
                         }};
 
                         html2pdf().set(opt).from(element).save().then(() => {{
