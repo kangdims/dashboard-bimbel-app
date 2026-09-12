@@ -376,7 +376,10 @@ def format_markdown_to_html(md_text):
     
     text = md_text.replace("\r\n", "\n").replace("<br>", "\n")
     
-    # 1. Bersihkan tanda asteris cacat/tercecer seperti **Kepada:* atau * *Mekanisme:*
+    # Otomatis pisahkan MEMORANDUM EKSEKUTIF dari Kepada: jika terikat dalam 1 baris
+    text = re.sub(r'(MEMORANDUM EKSEKUTIF)\s*(Kepada:)', r'\1\n\n\2', text, flags=re.IGNORECASE)
+    
+    # Bersihkan tanda asteris cacat/tercecer seperti **Kepada:* atau * *Mekanisme:*
     text = re.sub(r'\*\s*\*(.*?):\*', r'<strong>\1:</strong>', text)
     text = re.sub(r'\*\*(.*?):\*', r'<strong>\1:</strong>', text)
     text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
@@ -395,12 +398,12 @@ def format_markdown_to_html(md_text):
                 in_list = False
             continue
         
-        # Penanganan khusus Judul MEMORANDUM EKSEKUTIF agar rapi di tengah
+        # Penanganan khusus Judul MEMORANDUM EKSEKUTIF di tengah dengan jarak 1 spasi di bawahnya
         if 'MEMORANDUM EKSEKUTIF' in line_str.upper() and len(line_str) < 35:
             if in_list:
                 html_lines.append('</ul>')
                 in_list = False
-            html_lines.append('<h2 style="text-align: center; color: #003366; margin-top: 10px; margin-bottom: 15px; font-size: 14pt; font-weight: bold; border-bottom: 2px solid #003366; padding-bottom: 6px; page-break-after: avoid;">MEMORANDUM EKSEKUTIF</h2>')
+            html_lines.append('<h2 style="text-align: center; color: #003366; margin-top: 10px; margin-bottom: 18px; font-size: 14pt; font-weight: bold; border-bottom: 2px solid #003366; padding-bottom: 6px; page-break-after: avoid;">MEMORANDUM EKSEKUTIF</h2>')
         
         elif line_str.startswith('### '):
             if in_list:
@@ -445,7 +448,7 @@ def format_markdown_to_html(md_text):
                 if in_list:
                     html_lines.append('</ul>')
                     in_list = False
-                html_lines.append(f'<p style="margin-top:2px; margin-bottom:4px; font-size:12pt; text-align: left; page-break-inside: avoid;">{line_str}</p>')
+                html_lines.append(f'<p style="margin-top:4px; margin-bottom:4px; font-size:12pt; text-align: left; page-break-inside: avoid;">{line_str}</p>')
             else:
                 if in_list:
                     html_lines.append('</ul>')
@@ -1160,15 +1163,13 @@ with tab7:
 Berdasarkan data operasional & keuangan terbaru berikut:
 {data_context}
 
-Sertakan pula pertimbangan kualitatif operasional cabang berikut dalam analisis Anda:
-1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang senantiasa aktif terlibat dalam agenda promo ke sekolah-sekolah mitra dengan mengadakan Try Out (TO), asesmen akademik, tes MBTI, atau motivasi sebagai pengantar/pintu masuk pendaftaran.
-2. **Program START NF (Tes Literasi & Numerasi Gratis)**: Untuk memperluas jangkauan perekrutan siswa baru (SD, SMP, SMA), cabang menggelar Tes Kemampuan Dasar Literasi dan Numerasi (START NF) secara GRATIS sebagai saluran perolehan database calon siswa potensial.
-3. **Fitur & Fasilitas Unggulan Nurul Fikri**: Bagi siswa yang berhasil direkrut, cabang menyampaikan jaminan kualitas fasilitas pembelajaran lengkap sesuai flyer resmi:
-   - 100% Pengajar PTN & Pembelajaran Tatap Muka Full.
-   - Modul Cetak Zuper Book & Modul Digital Interaktif.
-   - Akses Pembelajaran Online 24 jam via Aplikasi SIP-NF & NF Juara (Video Pembelajaran, E-Modul, TryOut, Tes Formatif, & Raport Siswa).
-   - Free Chat Konsultasi dengan pengajar terbaik (Kuota 200 sesi).
-   - Analisis Peluang PTN Canggih: Sistem ANDARA (Analisis Data Raport & Alumni untuk SNBP) serta MBPJ (Matriks Bantu Pemilihan Jurusan untuk SNBT).
+Sertakan pula pertimbangan kualitatif & batasan operasional cabang berikut dalam analisis Anda:
+1. **Promo Sekolah & Event TO/Asesmen**: Tim cabang aktif melakukan penetrasi sekolah mitra via Try Out (TO), asesmen akademik, tes MBTI, & sesi motivasi.
+2. **Monetisasi Database & Promo MILAD NF ke-41 (September 2026)**: Pemanfaatan momentum **MILAD NF ke-41** pada bulan **September 2026** ini dengan memberikan **Diskon 25%** (berlaku offline maupun online) sebagai *closing hook* utama mengonversi database peserta tes gratis START NF (Literasi & Numerasi) dan event promo sekolah.
+3. **Penyederhanaan Web PSB Online (UX Improvement)**: Mendorong Tim IT Pusat memangkas alur pendaftaran Web PSB yang panjang menjadi *Fast Registration* (maksimal 3 langkah ringkas dengan verifikasi OTP WhatsApp) agar tidak menyulitkan orang tua siswa namun tetap terjamin keamanan datanya.
+4. **Tata Kelola Data Cleansing (IT Pusat vs Cabang)**: Proses *Data Cleansing* master data (seperti pembenahan data kategori sekolah "0") ditarik sepenuhnya menjadi kewenangan **Tim IT Pusat** (karena SRO/JRO di cabang tidak memiliki kewenangan manipulasi data master). SRO/JRO cabang hanya bertugas mengidentifikasi dan melaporkan data anomali via sistem pelaporan/ticketing.
+5. **Mitigasi Kendala VA BSI & Biaya Admin**: Mengatasi hambatan Virtual Account BSI (kurangnya pemahaman orang tua & beban biaya admin Rp3.500 BSI / Rp10.000 non-BSI) melalui pendampingan visual oleh Front Office, serta mengajukan rekomendasi opsi pembayaran bebas biaya admin (QRIS / Multi-Bank) atau skema subsidi biaya admin oleh manajemen.
+6. **Fitur & Fasilitas Unggulan Nurul Fikri**: Penonjolan 100% Pengajar PTN Tatap Muka, Modul Zuper Book, SIP-NF, NF Juara, Free Chat 200 sesi, serta Sistem ANDARA (SNBP) & MBPJ (SNBT).
 
 Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesional berikut:
 
@@ -1182,16 +1183,16 @@ Subjek: Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
 ---
 
 ### 1. ANALISIS DESKRIPTIF (What Happened)
-(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, dan rasio pelunasan berdasarkan data riil saat ini, serta saluran masuk pendaftar).
+(Jabarkan kondisi faktual pencapaian siswa, pendapatan cash in, omset paket, rasio pelunasan, dan saluran masuk pendaftar).
 
 ### 2. ANALISIS DIAGNOSTIK (Why It Happened)
-(Analisis akar masalah & pemicu. Evaluasi efektivitas keterlibatan tim cabang dalam promo sekolah dengan TO/MBTI/Asesmen, serta efektivitas program START NF Gratis sebagai pendorong minat daftar siswa).
+(Analisis pemicu & kendala riil: efektivitas promo sekolah/START NF, hambatan alur pendaftaran Web PSB yang kompleks bagi orang tua, serta kendala transaksi VA BSI dan biaya admin).
 
 ### 3. ANALISIS PREDIKTIF (What Will Happen)
-(Proyeksi tren ke depan. Proyeksikan potensi konversi peserta START NF gratis menjadi siswa berbayar, serta risiko keterlambatan pelunasan piutang jika tidak di-follow-up dengan pendampingan fasilitas belajar).
+(Proyeksi konversi database START NF memanfaatkan momentum Diskon 25% MILAD NF ke-41 September 2026, serta risiko piutang tertahan jika masalah biaya admin/fitur tidak dimitigasi).
 
 ### 4. ANALISIS PRESKRIPTIF (What Should We Do)
-(Berikan 3 s/d 4 langkah strategis taktis & konkret yang HARUS dilakukan oleh Tim Cabang & Manajemen Wilayah untuk optimalisasi penagihan piutang serta peningkatan konversi pendaftar melalui penonjolan fitur unggulan seperti SIP-NF, ANDARA, dan MBPJ)."""
+(Berikan 4 langkah strategis taktis konkret: 1. Penagihan piutang berbasis aktivasi fitur & mitigasi biaya admin VA BSI; 2. Monetisasi database START NF via Promo MILAD NF ke-41 Diskon 25% di September 2026; 3. Rekomendasi ke IT Pusat untuk simplifikasi alur Web PSB & Data Cleansing terpusat; 4. Penetrasional feeder schools)."""
                     
                     st.session_state.ai_report_text = ask_gemini_ai(user_gemini_key, prompt_narrative)
 
@@ -1332,7 +1333,12 @@ Subjek: Laporan Analisis Kinerja Operasional & Keuangan: {lb_info}
 Konteks data dashboard saat ini:
 {data_context}
 
-Konteks Program: Cabang rajin promo TO/asesmen ke sekolah, mengadakan tes START NF (Literasi & Numerasi) gratis, dan mempromosikan fasilitas belajar (Pengajar PTN, SIP-NF, ANDARA, MBPJ).
+Konteks Program & Kendala Operasional: 
+- Penetrasi sekolah via promo TO/MBTI/Asesmen & tes START NF gratis.
+- Monetisasi database via Promo MILAD NF ke-41 (September 2026) Diskon 25%.
+- Kendala UX Web PSB (tahapan terlalu panjang bagi orang tua -> usul Fast Registration OTP WA).
+- Data Cleansing dilakukan IT Pusat (cabang hanya flagging/report).
+- Kendala VA BSI & Biaya Admin (pendampingan visual & usulan QRIS/subsidi admin).
 
 Pertanyaan Pengguna: '{user_question}'
 
