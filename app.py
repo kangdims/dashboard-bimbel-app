@@ -87,17 +87,17 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ---------------------------------------------------------
-# LOAD DATA ACCESS USER (keyaccess_peg.xlsx)
+# LOAD DATA ACCESS USER (keyaccess_peg.xlsx & Secrets Fallback)
 # ---------------------------------------------------------
 @st.cache_data(ttl=300)
 def load_pegawai_access():
+    # Prioritas 1: Pembacaan dari File Excel Lokal
     files = glob.glob("*keyaccess_peg*.xlsx") + glob.glob("keyaccess_peg.xlsx")
     if files:
         try:
             df = pd.read_excel(files[0])
             df['idpeg_str'] = df['idpeg'].apply(lambda x: str(int(x)) if pd.notna(x) and isinstance(x, (int, float)) else str(x).strip())
             
-            # Normalisasi kolom password dari Excel
             if 'password' in df.columns:
                 df['password_str'] = df['password'].apply(
                     lambda x: str(int(x)) if pd.notna(x) and isinstance(x, (int, float)) else (str(x).strip() if pd.notna(x) else "12345678")
@@ -108,6 +108,32 @@ def load_pegawai_access():
             return df
         except Exception as e:
             st.error(f"Gagal membaca file keyaccess_peg.xlsx: {e}")
+
+    # Prioritas 2: Fallback membaca dari Streamlit Secrets jika file Excel tidak ada di Cloud
+    try:
+        if "pegawai" in st.secrets:
+            secrets_data = []
+            sec_peg = st.secrets["pegawai"]
+            
+            if hasattr(sec_peg, "items"):
+                for idpeg, info in sec_peg.items():
+                    row = dict(info)
+                    row['idpeg'] = str(idpeg).strip()
+                    row['idpeg_str'] = str(idpeg).strip()
+                    row['password_str'] = str(info.get('password', '12345678')).strip()
+                    secrets_data.append(row)
+            elif isinstance(sec_peg, list):
+                for info in sec_peg:
+                    row = dict(info)
+                    row['idpeg_str'] = str(info.get('idpeg', '')).strip()
+                    row['password_str'] = str(info.get('password', '12345678')).strip()
+                    secrets_data.append(row)
+
+            if secrets_data:
+                return pd.DataFrame(secrets_data)
+    except Exception as e:
+        st.error(f"Gagal membaca data pegawai dari Streamlit Secrets: {e}")
+
     return pd.DataFrame()
 
 df_peg_access = load_pegawai_access()
@@ -191,7 +217,7 @@ if not st.session_state.logged_in:
                         st.session_state.show_welcome_toast = True
                         st.rerun()
                     else:
-                        st.error("❌ File keyaccess_peg.xlsx tidak ditemukan.")
+                        st.error("❌ Data pegawai tidak ditemukan (Excel / Secrets).")
     st.stop()
 
 # ---------------------------------------------------------
@@ -212,7 +238,7 @@ if st.session_state.show_welcome_toast:
     st.session_state.show_welcome_toast = False
 
 # ---------------------------------------------------------
-# MODUL RESET PASSWORD
+# MODUL RESET PASSWORD & USER INFO
 # ---------------------------------------------------------
 col_top_left, col_top_right = st.columns([1.5, 3])
 with col_top_left:
@@ -237,6 +263,16 @@ with col_top_right:
         st.rerun()
 
 st.divider()
+
+# ---------------------------------------------------------
+# SIDEBAR FILE UPLOADER (SUPORT UNTUK LOKAL & STREAMLIT CLOUD)
+# ---------------------------------------------------------
+st.sidebar.header("📁 Upload Data Excel Cabang")
+st.sidebar.caption("Jika dijalankan di Streamlit Cloud, silakan unggah file Excel operasional cabang Anda di sini:")
+
+uploaded_trx = st.sidebar.file_uploader("Upload File Transaksi (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+uploaded_siswa = st.sidebar.file_uploader("Upload File Data Siswa (.xlsx)", type=["xlsx"], accept_multiple_files=True)
+uploaded_diskon = st.sidebar.file_uploader("Upload File Diskon (.xlsx)", type=["xlsx"], accept_multiple_files=True)
 
 # ---------------------------------------------------------
 # MAPPING KODE CABANG & JENJANG
@@ -346,7 +382,15 @@ def get_kategori_siswa(biaya):
 @st.cache_data(ttl=600)
 def load_combined_data(uploaded_files, filename_keywords):
     if uploaded_files:
-        return pd.concat([pd.read_excel(f) for f in uploaded_files], ignore_index=True)
+        dfs = []
+        for f in uploaded_files:
+            try:
+                dfs.append(pd.read_excel(f))
+            except Exception:
+                pass
+        if dfs:
+            return pd.concat(dfs, ignore_index=True)
+            
     all_excel_files = glob.glob("*.xlsx")
     matched_files = [f for f in all_excel_files if any(kw in f.lower() for kw in filename_keywords) and 'keyaccess' not in f.lower()]
     if matched_files:
@@ -360,9 +404,9 @@ def load_combined_data(uploaded_files, filename_keywords):
             return pd.concat(dfs, ignore_index=True)
     return pd.DataFrame()
 
-df_trx_raw = load_combined_data(None, ["trx", "laporan", "transaksi"])
-df_siswa_raw = load_combined_data(None, ["siswa", "siswanf"])
-df_diskon_raw = load_combined_data(None, ["diskon"])
+df_trx_raw = load_combined_data(uploaded_trx, ["trx", "laporan", "transaksi"])
+df_siswa_raw = load_combined_data(uploaded_siswa, ["siswa", "siswanf"])
+df_diskon_raw = load_combined_data(uploaded_diskon, ["diskon"])
 
 if not df_trx_raw.empty:
     if 'Lb' in df_trx_raw.columns:
@@ -592,7 +636,7 @@ with tab1:
             st.plotly_chart(fig_kat_trx, use_container_width=True)
             st.caption("📝 **Penjelasan Diagram Batang:** Menampilkan total transaksi pembayaran formulir berdasarkan kelompok status siswa.")
     else:
-        st.warning("Data Transaksi tidak ditemukan untuk lokasi terpilih.")
+        st.warning("Data Transaksi tidak ditemukan untuk lokasi terpilih. Silakan unggah file Excel transaksi via sidebar di sebelah kiri.")
 
 # --- TAB 2: OVERVIEW DATA SISWA ---
 with tab2:
@@ -633,7 +677,7 @@ with tab2:
                 st.plotly_chart(fig_jalur_pie, use_container_width=True)
                 st.caption("📝 **Penjelasan Diagram:** Perbandingan efektivitas pendaftaran siswa melalui sistem Website PSB Online vs Offline.")
     else:
-        st.warning("Data Siswa tidak ditemukan untuk filter terpilih.")
+        st.warning("Data Siswa tidak ditemukan untuk filter terpilih. Silakan unggah file Excel data siswa via sidebar di sebelah kiri.")
 
 # --- TAB 3: SEKOLAH & DOMISILI SISWA ---
 with tab3:
@@ -1013,7 +1057,7 @@ with tab7:
 
         data_context = "\n- ".join([""] + ctx_lines)
 
-        if st.button("✨ Hasilkan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
+        if st.button("✨ Hasikan Laporan & Rekomendasi Eksekutif dengan AI", type="primary", use_container_width=True):
             if not user_gemini_key:
                 st.error("⚠️ API Key tidak ditemukan. Silakan tambahkan `GEMINI_API_KEY` pada Streamlit Secrets.")
             else:
