@@ -98,7 +98,6 @@ JENJANG_ORDER = ['4 SD', '5 SD', '6 SD', '7 SMP', '8 SMP', '9 SMP', '10 SMA', '1
 # ---------------------------------------------------------
 @st.cache_data(ttl=300)
 def load_pegawai_access():
-    # Prioritas 1: Pembacaan dari File Excel Lokal
     files = glob.glob("*keyaccess_peg*.xlsx") + glob.glob("keyaccess_peg.xlsx")
     if files:
         try:
@@ -116,7 +115,6 @@ def load_pegawai_access():
         except Exception as e:
             st.error(f"Gagal membaca file keyaccess_peg.xlsx: {e}")
 
-    # Prioritas 2: Fallback membaca dari Streamlit Secrets jika file Excel tidak ada di Cloud
     try:
         if "pegawai" in st.secrets:
             secrets_data = []
@@ -373,14 +371,73 @@ def get_kategori_siswa(biaya):
         return f'Lainnya (Rp{int(biaya):,})'
 
 def format_markdown_to_html(md_text):
-    clean_text = md_text.replace("<br>", "\n")
-    html_content = re.sub(r'^### (.*?)$', r'<h3>\1</h3>', clean_text, flags=re.M)
-    html_content = re.sub(r'^## (.*?)$', r'<h2>\1</h2>', html_content, flags=re.M)
-    html_content = re.sub(r'^# (.*?)$', r'<h1>\1</h1>', html_content, flags=re.M)
-    html_content = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', html_content)
-    html_content = re.sub(r'^\- (.*?)$', r'<li>\1</li>', html_content, flags=re.M)
-    html_content = html_content.replace('\n', '<br>')
-    return html_content
+    if not md_text:
+        return ""
+    
+    text = md_text.replace("\r\n", "\n").replace("<br>", "\n")
+    
+    # Pembersihan pola penanda tebal/asterik yang tidak berpasangan
+    text = re.sub(r'\*\s*\*(.*?):\*', r'<strong>\1:</strong>', text)
+    text = re.sub(r'\*\*(.*?):\*', r'<strong>\1:</strong>', text)
+    text = re.sub(r'\*\*(.*?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.*?)\*', r'<em>\1</em>', text)
+    
+    lines = text.split('\n')
+    html_lines = []
+    in_list = False
+    
+    for line in lines:
+        line_str = line.strip()
+        
+        if line_str.startswith('### '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h3 style="color:#003366; font-size:13pt; margin-top:14px; margin-bottom:6px; border-bottom:1px solid #DDD; padding-bottom:3px;">{line_str[4:]}</h3>')
+        elif line_str.startswith('## '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h2 style="color:#003366; font-size:14pt; margin-top:16px; margin-bottom:8px; border-bottom:1px solid #003366; padding-bottom:4px;">{line_str[3:]}</h2>')
+        elif line_str.startswith('# '):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<h1 style="color:#003366; font-size:16pt; margin-top:18px; margin-bottom:10px;">{line_str[2:]}</h1>')
+        elif line_str.startswith('---'):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append('<hr style="border:0; border-top:1px solid #CCC; margin:12px 0;">')
+            
+        elif re.match(r'^[\*\-]\s+(.*)', line_str):
+            if not in_list:
+                html_lines.append('<ul style="margin-top:4px; margin-bottom:8px; padding-left:20px;">')
+                in_list = True
+            content = re.sub(r'^[\*\-]\s+', '', line_str)
+            html_lines.append(f'<li style="margin-bottom:4px; font-size:12pt;">{content}</li>')
+            
+        elif re.match(r'^\d+\.\s+(.*)', line_str):
+            if in_list:
+                html_lines.append('</ul>')
+                in_list = False
+            html_lines.append(f'<p style="margin-top:10px; margin-bottom:4px; font-size:12pt;"><strong>{line_str}</strong></p>')
+            
+        else:
+            if in_list and line_str == "":
+                html_lines.append('</ul>')
+                in_list = False
+            
+            if line_str != "":
+                if not in_list:
+                    html_lines.append(f'<p style="margin-top:4px; margin-bottom:6px; font-size:12pt; line-height:1.4;">{line_str}</p>')
+                else:
+                    html_lines.append(f'<li style="margin-bottom:4px; font-size:12pt;">{line_str}</li>')
+                    
+    if in_list:
+        html_lines.append('</ul>')
+        
+    return '\n'.join(html_lines)
 
 @st.cache_data(ttl=600)
 def load_combined_data(uploaded_files, filename_keywords):
@@ -1124,18 +1181,22 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
             st.markdown("### 📝 Hasil Laporan Analisis Eksekutif AI:")
             st.markdown(st.session_state.ai_report_text)
             
-            # Format HTML Inner
+            # Formatting HTML Inner (Format Calibri 12pt, Bersih Asterisk)
             report_inner_html = format_markdown_to_html(st.session_state.ai_report_text)
             clean_lb_filename = str(selected_lb).replace(" ", "_").replace("/", "_")
             pdf_filename = f"Memorandum_Eksekutif_{clean_lb_filename}_{datetime.now().strftime('%Y%m%d')}.pdf"
             
-            # Embed HTML + JS (html2pdf.js) untuk Download Langsung Format .PDF
+            # Layout PDF A4 dengan Margin 1 cm (10mm)
             pdf_component_code = f"""
             <!DOCTYPE html>
             <html>
             <head>
                 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
                 <style>
+                    @page {{
+                        size: A4;
+                        margin: 10mm;
+                    }}
                     .btn-pdf {{
                         background: linear-gradient(135deg, #FF4B4B 0%, #FF2B2B 100%);
                         color: #FFFFFF;
@@ -1147,7 +1208,7 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                         cursor: pointer;
                         width: 100%;
                         box-shadow: 0 4px 15px rgba(255, 75, 75, 0.35);
-                        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                        font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
                         transition: all 0.3s ease;
                     }}
                     .btn-pdf:hover {{
@@ -1155,21 +1216,35 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                         transform: translateY(-1px);
                     }}
                     #report-content {{
-                        font-family: 'Arial', sans-serif;
-                        line-height: 1.6;
-                        color: #222;
-                        padding: 25px;
+                        font-family: 'Calibri', 'Segoe UI', Arial, sans-serif;
+                        font-size: 12pt;
+                        line-height: 1.4;
+                        color: #111111;
+                        padding: 10mm;
                         background: #FFFFFF;
+                        box-sizing: border-box;
                     }}
                     .header-banner {{
-                        border-bottom: 3px double #00cc96;
-                        padding-bottom: 8px;
-                        margin-bottom: 20px;
+                        border-bottom: 2px solid #003366;
+                        padding-bottom: 6px;
+                        margin-bottom: 14px;
                     }}
-                    h1 {{ color: #003366; font-size: 18pt; margin: 0; text-transform: uppercase; }}
-                    h2, h3 {{ color: #003366; margin-top: 14pt; margin-bottom: 6pt; font-size: 13pt; border-bottom: 1px solid #ddd; padding-bottom: 3px; }}
-                    strong {{ color: #111; }}
-                    li {{ margin-bottom: 4px; }}
+                    .header-banner h1 {{
+                        color: #003366;
+                        font-size: 16pt;
+                        margin: 0;
+                        font-weight: bold;
+                        text-transform: uppercase;
+                    }}
+                    .header-banner p {{
+                        margin: 2px 0 0 0;
+                        color: #555555;
+                        font-size: 10pt;
+                    }}
+                    strong {{
+                        font-weight: bold;
+                        color: #000000;
+                    }}
                 </style>
             </head>
             <body style="margin:0; padding:0; background:transparent;">
@@ -1179,7 +1254,7 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                     <div id="report-content">
                         <div class="header-banner">
                             <h1>BKB NURUL FIKRI</h1>
-                            <p style="margin:4px 0 0 0; color: #555; font-size: 10pt;">Evidence-Based Policy Tool — Wilayah Megapolitan Selatan</p>
+                            <p>Evidence-Based Policy Tool — Wilayah Megapolitan Selatan</p>
                         </div>
                         <div>{report_inner_html}</div>
                     </div>
@@ -1193,13 +1268,13 @@ Formatlah jawaban Anda persis dalam struktur **MEMORANDUM EKSEKUTIF** profesiona
                         wrapper.style.display = 'block';
                         wrapper.style.position = 'absolute';
                         wrapper.style.left = '-9999px';
-                        wrapper.style.width = '750px';
+                        wrapper.style.width = '190mm';
 
                         const opt = {{
-                            margin:       [15, 15, 15, 15],
+                            margin:       [10, 10, 10, 10], // Margin 1 cm
                             filename:     '{pdf_filename}',
                             image:        {{ type: 'jpeg', quality: 0.98 }},
-                            html2canvas:  {{ scale: 2, useCORS: true }},
+                            html2canvas:  {{ scale: 2, useCORS: true, logging: false }},
                             jsPDF:        {{ unit: 'mm', format: 'a4', orientation: 'portrait' }}
                         }};
 
